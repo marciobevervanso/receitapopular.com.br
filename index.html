@@ -1,0 +1,114 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Receita Popular - Gastronomia Descomplicada</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- html2pdf Library for PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    
+    <!-- Google Fonts: Montserrat (Headings/UI) & Merriweather (Reading text) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Montserrat"', 'sans-serif'],
+              serif: ['"Merriweather"', 'serif'],
+            },
+            colors: {
+              'pop-red': '#E82F3F',      // Slightly deeper red, less neon
+              'pop-yellow': '#FDBF15',   // Warm mustard yellow
+              'pop-dark': '#1A1C20',     // Rich black
+              'pop-gray': '#F4F5F7',     // Cool light gray
+              'pop-green': '#27AE60',    // Fresh green
+            },
+            boxShadow: {
+              'soft': '0 20px 60px -15px rgba(0,0,0,0.08)',
+              'card': '0 4px 20px rgba(0,0,0,0.03)',
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.5s ease-out',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #FFFFFF;
+        color: #1A1C20;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      .prose p {
+        margin-bottom: 1.5em;
+      }
+      
+      /* Print Styles Strategy: Hide #root content, Show #pdf-template content if available */
+      @media print {
+        @page { margin: 10mm; size: A4; }
+        
+        /* Hide Normal UI */
+        body > *:not(#pdf-template) {
+           display: none !important;
+        }
+        
+        /* Make the template visible for the printer */
+        #pdf-template {
+           display: block !important;
+           position: relative !important;
+           top: 0 !important;
+           left: 0 !important;
+           width: 100% !important;
+           height: auto !important;
+           margin: 0 !important;
+           padding: 0 !important;
+           overflow: visible !important;
+        }
+
+        * { 
+          -webkit-print-color-adjust: exact !important; 
+          print-color-adjust: exact !important; 
+        }
+      }
+
+      /* Hide scrollbar for Chrome, Safari and Opera */
+      .no-scrollbar::-webkit-scrollbar {
+          display: none;
+      }
+      /* Hide scrollbar for IE, Edge and Firefox */
+      .no-scrollbar {
+          -ms-overflow-style: none;  /* IE and Edge */
+          scrollbar-width: none;  /* Firefox */
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.84.0"
+  }
+}
+</script>
+</head>
+  <body class="font-sans antialiased text-pop-dark">
+    <div id="root"></div>
+  </body>
+</html>
