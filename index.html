@@ -13,6 +13,11 @@
     <meta name="theme-color" content="#E82F3F">
     <link rel="apple-touch-icon" href="/icon-192.png">
 
+    <script>
+      // Safety shim: Ensures 'process.env' exists in the browser to prevent "white screen" crashes
+      window.process = window.process || { env: {} };
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=pub-6058225169212979" crossorigin="anonymous"></script>
