@@ -3,8 +3,23 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Recipe, WebStory, NutritionalAnalysis, ReelScript, ChatMessage, DietPlan } from "../types";
 import { storageService } from "./storageService";
 
+// Helper to get the key from Vite env or fallback
+const getApiKey = (): string => {
+  // @ts-ignore: Vite specific syntax
+  return import.meta.env.VITE_API_KEY || process.env.API_KEY || '';
+};
+
 // Prevent crash if API_KEY is missing, though API calls will fail gracefully later
-const createAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+const createAI = () => {
+  const key = getApiKey();
+  if (!key) {
+    console.warn("⚠️ [GeminiService] VITE_API_KEY is missing or empty. AI features will fail.");
+  } else {
+    // Log masked key for verification
+    console.log(`✅ [GeminiService] API_KEY loaded. Length: ${key.length}. Start: ${key.substring(0,4)}...`);
+  }
+  return new GoogleGenAI({ apiKey: key });
+};
 
 const recipeSchema: Schema = { type: Type.OBJECT, properties: { title: { type: Type.STRING }, slug: { type: Type.STRING }, datePublished: { type: Type.STRING }, description: { type: Type.STRING }, story: { type: Type.STRING }, prepTime: { type: Type.STRING }, cookTime: { type: Type.STRING }, servings: { type: Type.NUMBER }, ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { item: { type: Type.STRING }, amount: { type: Type.STRING }, note: { type: Type.STRING }, purchaseLink: { type: Type.STRING } }, required: ["item", "amount"] } }, steps: { type: Type.ARRAY, items: { type: Type.STRING } }, nutrition: { type: Type.OBJECT, properties: { calories: { type: Type.NUMBER }, protein: { type: Type.STRING }, carbs: { type: Type.STRING }, fat: { type: Type.STRING } }, required: ["calories", "protein", "carbs", "fat"] }, tags: { type: Type.ARRAY, items: { type: Type.STRING } }, visualDescription: { type: Type.STRING }, affiliates: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, url: { type: Type.STRING }, price: { type: Type.STRING } }, required: ["name", "url"] } }, tips: { type: Type.ARRAY, items: { type: Type.STRING } }, pairing: { type: Type.STRING }, faq: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { question: { type: Type.STRING }, answer: { type: Type.STRING } }, required: ["question", "answer"] } } }, required: ["title", "slug", "datePublished", "description", "ingredients", "steps", "nutrition", "story", "visualDescription", "tips", "pairing", "faq", "tags"] };
 const storySchema: Schema = { type: Type.OBJECT, properties: { slides: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, layout: { type: Type.STRING }, text: { type: Type.STRING }, subtext: { type: Type.STRING }, visualPrompt: { type: Type.STRING } }, required: ["type", "text", "layout", "visualPrompt"] } } } };
@@ -299,7 +314,7 @@ export const generateReelVideo = async (visualPrompt: string): Promise<string | 
       operation = await ai.operations.getVideosOperation({ operation: operation });
     }
     const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
-    return videoUri ? `${videoUri}&key=${process.env.API_KEY}` : null;
+    return videoUri ? `${videoUri}&key=${getApiKey()}` : null;
   } catch (error: any) {
     console.error("Veo Error:", error);
     if (error.message?.includes("404") || error.status === 404) {
@@ -314,7 +329,7 @@ export const generateReelVideo = async (visualPrompt: string): Promise<string | 
                 operation = await ai.operations.getVideosOperation({ operation: operation });
              }
              const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
-             if (videoUri) return `${videoUri}&key=${process.env.API_KEY}`;
+             if (videoUri) return `${videoUri}&key=${getApiKey()}`;
         } catch(fallbackErr) { console.error(fallbackErr); }
     }
     throw error;

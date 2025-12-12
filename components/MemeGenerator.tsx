@@ -18,11 +18,17 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewCaption, setPreviewCaption] = useState('');
 
+  // Helper to retrieve key
+  const getApiKey = () => {
+    // @ts-ignore
+    return import.meta.env.VITE_API_KEY || process.env.API_KEY || '';
+  };
+
   // 1. Generate Text Idea (Brainstorm)
   const handleMagicIdea = async () => {
     setIsDreaming(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: getApiKey() });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: "Gere uma única frase curta e EXTREMAMENTE engraçada/caótica para um meme de culinária. Estilo: Twitter/TikTok Brasil, linguagem coloquial, 'perrengue chique', expectativa vs realidade. Ex: 'Minha dieta durou 15 min', 'O que eu cozinhei vs o que comi'. Retorne APENAS o texto puro, sem aspas.",
@@ -47,7 +53,7 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
     setStatus('generating');
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
       // Parallel Generation: Image & Caption
       // Prompt ajustado para FOTOGRAFIA REALISTA

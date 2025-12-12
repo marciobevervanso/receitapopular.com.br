@@ -13,11 +13,24 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
   const [availableRecipes, setAvailableRecipes] = useState<Recipe[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [saving, setSaving] = useState(false);
+  const [apiKeyStatus, setApiKeyStatus] = useState<'checking' | 'ok' | 'missing'>('checking');
+  const [keyLength, setKeyLength] = useState(0);
 
   useEffect(() => {
     // We need to fetch recipes to populate the hero selector
     storageService.getRecipes().then(setAvailableRecipes);
     storageService.getCategories().then(setCategories);
+
+    // Verify API Key (Try VITE_ first, then process.env)
+    // @ts-ignore
+    const key = import.meta.env.VITE_API_KEY || process.env.API_KEY;
+    
+    if (key && key.length > 10) {
+       setApiKeyStatus('ok');
+       setKeyLength(key.length);
+    } else {
+       setApiKeyStatus('missing');
+    }
   }, []);
 
   const handleChange = (field: keyof SiteSettings, value: any) => {
@@ -54,6 +67,30 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
        <div className="mb-8">
          <h2 className="text-3xl font-extrabold text-pop-dark">Configurações do Site</h2>
          <p className="text-gray-500">Ajuste os detalhes globais da plataforma.</p>
+       </div>
+
+       {/* DIAGNOSTICS PANEL */}
+       <div className={`p-6 rounded-2xl border mb-8 flex items-center justify-between shadow-sm ${apiKeyStatus === 'ok' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+          <div className="flex items-center gap-4">
+             <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${apiKeyStatus === 'ok' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                {apiKeyStatus === 'ok' ? '✓' : '✕'}
+             </div>
+             <div>
+                <h3 className={`font-black text-lg ${apiKeyStatus === 'ok' ? 'text-green-800' : 'text-red-800'}`}>
+                   Status da API Key (IA)
+                </h3>
+                <p className={`text-sm ${apiKeyStatus === 'ok' ? 'text-green-700' : 'text-red-700'}`}>
+                   {apiKeyStatus === 'checking' && 'Verificando...'}
+                   {apiKeyStatus === 'ok' && `Conectado! Chave detectada (${keyLength} caracteres).`}
+                   {apiKeyStatus === 'missing' && 'Chave VITE_API_KEY não encontrada. A IA não funcionará.'}
+                </p>
+             </div>
+          </div>
+          {apiKeyStatus === 'missing' && (
+             <div className="text-xs bg-white px-3 py-2 rounded border border-red-100 text-red-500 font-mono">
+                configure VITE_API_KEY no Netlify
+             </div>
+          )}
        </div>
 
        <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-8">
