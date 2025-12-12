@@ -80,21 +80,27 @@ export const App: React.FC = () => {
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
 
+  // Pagination State
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        const [loadedRecipes, loadedCats, loadedStories, loadedSettings] = await Promise.all([
-          storageService.getRecipes(),
+        // Load only the first page of recipes to start (Optimized)
+        const [initialRecipes, loadedCats, loadedStories, loadedSettings] = await Promise.all([
+          storageService.getRecipesPaginated(0, 12),
           storageService.getCategories(),
           storageService.getStories(),
           storageService.getSettings()
         ]);
 
-        setRecipes(loadedRecipes);
+        setRecipes(initialRecipes);
         setCategories(loadedCats);
         setStories(loadedStories);
         setSettings(loadedSettings);
+        setPage(1); // Next page is 1
       } catch (error) {
         console.error("Failed to load data", error);
       } finally {
@@ -113,6 +119,21 @@ export const App: React.FC = () => {
        setShowLogin(true);
     }
   }, []);
+
+  // Handle Load More Logic (Infinite Scroll Simulation)
+  const handleLoadMore = async () => {
+    try {
+      const moreRecipes = await storageService.getRecipesPaginated(page, 12);
+      if (moreRecipes.length > 0) {
+        setRecipes(prev => [...prev, ...moreRecipes]);
+        setPage(p => p + 1);
+      } else {
+        setHasMore(false);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const timeContext = useMemo(() => {
     const hour = new Date().getHours();
@@ -162,23 +183,27 @@ export const App: React.FC = () => {
 
   }, [categories, recipes, settings.specialCollectionCategoryId]);
 
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = async () => {
     setIsLoggedIn(true);
     setShowLogin(false);
+    // If logging in to dashboard, fetch ALL recipes to manage them
+    const all = await storageService.getRecipes(); 
+    setRecipes(all);
     setView('dashboard');
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setView('home');
+    // Refresh to reset state cleanly
+    window.location.reload();
   };
 
   const handleImportSuccess = async (newRecipe: Recipe, skipGlobalLoading = false) => {
     if (!skipGlobalLoading) setIsLoading(true);
     try {
       await storageService.saveRecipe(newRecipe);
-      const updated = await storageService.getRecipes();
-      setRecipes(updated);
+      setRecipes(prev => [newRecipe, ...prev]);
       if (!skipGlobalLoading) setSelectedRecipe(newRecipe);
     } catch (e) {
       console.error(e);
@@ -192,8 +217,7 @@ export const App: React.FC = () => {
     setIsLoading(true);
     try {
       await storageService.saveRecipe(updatedRecipe);
-      const reloaded = await storageService.getRecipes();
-      setRecipes(reloaded);
+      setRecipes(prev => prev.map(r => r.id === updatedRecipe.id ? updatedRecipe : r));
     } catch (e) {
       alert('Erro ao atualizar receita.');
     } finally {
@@ -309,7 +333,7 @@ export const App: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
            <div className="w-16 h-16 border-4 border-pop-gray border-t-pop-red rounded-full animate-spin mx-auto mb-4"></div>
-           <p className="text-gray-400 font-bold uppercase tracking-widest text-sm">Sincronizando com a Nuvem...</p>
+           <p className="text-gray-400 font-bold uppercase tracking-widest text-sm">Carregando...</p>
         </div>
       </div>
     );
@@ -419,7 +443,7 @@ export const App: React.FC = () => {
             </div>
 
             <Hero 
-              recipes={recipes} 
+              recipes={recipes.slice(0, 5)} 
               settings={settings} 
               language={language} 
               onOpenRecipe={openRecipe} 
@@ -533,13 +557,17 @@ export const App: React.FC = () => {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10">
-                  {recipes.slice(0, 6).map((recipe) => (
+                  {recipes.slice(0, 9).map((recipe) => (
                     <RecipeCard key={recipe.id} recipe={recipe} onClick={() => openRecipe(recipe)} />
                   ))}
                 </div>
                 
-                <div className="mt-8 text-center md:hidden">
-                   <button onClick={openAllRecipes} className="px-6 py-3 border border-gray-200 rounded-full text-sm font-bold text-gray-600 w-full">Ver todas as receitas</button>
+                <div className="mt-8 text-center">
+                   {hasMore && (
+                      <button onClick={handleLoadMore} className="px-6 py-3 border border-gray-200 rounded-full text-sm font-bold text-gray-600 hover:text-pop-dark transition-colors">
+                         Carregar Mais Receitas
+                      </button>
+                   )}
                 </div>
               </section>
             </LazySection>

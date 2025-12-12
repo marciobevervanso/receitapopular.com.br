@@ -1,7 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Recipe } from '../types';
 import { RecipeCard } from './RecipeCard';
+import { storageService } from '../services/storageService';
 
 interface AllRecipesPageProps {
   recipes: Recipe[];
@@ -14,13 +15,31 @@ export const AllRecipesPage: React.FC<AllRecipesPageProps> = ({
   onOpenRecipe, 
   onBack 
 }) => {
-  const [visibleCount, setVisibleCount] = useState(12);
+  const [list, setList] = useState<Recipe[]>(recipes);
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
-  const visibleRecipes = recipes.slice(0, visibleCount);
-  const hasMore = visibleCount < recipes.length;
-
-  const handleLoadMore = () => {
-    setVisibleCount(prev => prev + 12);
+  const handleLoadMore = async () => {
+    setIsLoading(true);
+    try {
+      const more = await storageService.getRecipesPaginated(page, 12);
+      if (more.length > 0) {
+        setList(prev => {
+           // De-duplicate in case of overlap
+           const ids = new Set(prev.map(p => p.id));
+           const newItems = more.filter(m => !ids.has(m.id));
+           return [...prev, ...newItems];
+        });
+        setPage(p => p + 1);
+      } else {
+        setHasMore(false);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -45,7 +64,7 @@ export const AllRecipesPage: React.FC<AllRecipesPageProps> = ({
           </p>
           
           <div className="mt-8 flex justify-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
-             <span>Mostrando {visibleRecipes.length} de {recipes.length} Receitas</span>
+             <span>Mostrando {list.length} Receitas</span>
              <span>•</span>
              <span>Atualizado Hoje</span>
           </div>
@@ -55,7 +74,7 @@ export const AllRecipesPage: React.FC<AllRecipesPageProps> = ({
       {/* Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
-          {visibleRecipes.map((recipe) => (
+          {list.map((recipe) => (
             <RecipeCard 
               key={recipe.id} 
               recipe={recipe} 
@@ -68,14 +87,16 @@ export const AllRecipesPage: React.FC<AllRecipesPageProps> = ({
           <div className="mt-16 text-center">
             <button 
               onClick={handleLoadMore}
-              className="px-8 py-4 bg-white border-2 border-gray-200 text-gray-600 font-bold rounded-full hover:border-pop-dark hover:text-pop-dark hover:bg-gray-50 transition-all shadow-sm active:scale-95 uppercase tracking-widest text-xs"
+              disabled={isLoading}
+              className="px-8 py-4 bg-white border-2 border-gray-200 text-gray-600 font-bold rounded-full hover:border-pop-dark hover:text-pop-dark hover:bg-gray-50 transition-all shadow-sm active:scale-95 uppercase tracking-widest text-xs flex items-center gap-2 mx-auto disabled:opacity-50"
             >
-              Carregar Mais
+              {isLoading && <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>}
+              {isLoading ? 'Carregando...' : 'Carregar Mais'}
             </button>
           </div>
         )}
 
-        {recipes.length === 0 && (
+        {list.length === 0 && (
            <div className="text-center py-20">
               <p className="text-gray-400 font-serif italic">Nenhuma receita encontrada no catálogo.</p>
            </div>

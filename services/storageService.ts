@@ -110,13 +110,64 @@ export const storageService = {
      return uploadImageInternal(base64Data, `${folder}/img`);
   },
 
-  // --- RECIPES ---
+  // --- RECIPES (PAGINATED & SEARCH) ---
 
-  async getRecipes(): Promise<Recipe[]> {
+  // Fetches a specific page of recipes
+  async getRecipesPaginated(page: number = 0, pageSize: number = 12): Promise<Recipe[]> {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+
     const { data, error } = await supabase
       .from('recipes')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      console.error('Error fetching recipes page:', error);
+      return [];
+    }
+
+    return data.map((row: any) => ({
+      ...row.data,
+      id: row.id,
+      slug: row.slug,
+      title: row.title
+    }));
+  },
+
+  // Optimized Search: Search on Server Side instead of downloading everything
+  async searchRecipes(query: string): Promise<Recipe[]> {
+    if (!query) return [];
+
+    // Search in title column OR perform a text search on the JSONB data tags
+    const { data, error } = await supabase
+      .from('recipes')
+      .select('*')
+      .or(`title.ilike.%${query}%,slug.ilike.%${query}%`)
+      .limit(20); // Limit results for performance
+
+    if (error) {
+      console.error('Error searching recipes:', error);
+      return [];
+    }
+
+    return data.map((row: any) => ({
+      ...row.data,
+      id: row.id,
+      slug: row.slug,
+      title: row.title
+    }));
+  },
+
+  // Fetches ALL recipes (Only use for Dashboard or Export)
+  async getRecipes(): Promise<Recipe[]> {
+    // WARNING: Heavy operation. Avoid on client side main view.
+    const { data, error } = await supabase
+      .from('recipes')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100); // Safety limit for now
 
     if (error) {
       console.error('Error fetching recipes:', error);
