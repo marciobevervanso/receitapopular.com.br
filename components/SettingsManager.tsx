@@ -13,25 +13,63 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
   const [availableRecipes, setAvailableRecipes] = useState<Recipe[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [saving, setSaving] = useState(false);
-  const [apiKeyStatus, setApiKeyStatus] = useState<'checking' | 'ok' | 'missing'>('checking');
-  const [keyLength, setKeyLength] = useState(0);
+  
+  // API Key State
+  const [manualKey, setManualKey] = useState('');
+  const [keySource, setKeySource] = useState<'none' | 'vite' | 'manual'>('none');
+  const [keyStatus, setKeyStatus] = useState<'checking' | 'ok' | 'missing'>('checking');
 
   useEffect(() => {
-    // We need to fetch recipes to populate the hero selector
     storageService.getRecipes().then(setAvailableRecipes);
     storageService.getCategories().then(setCategories);
-
-    // Verify API Key (Try VITE_ first, then process.env)
-    // @ts-ignore
-    const key = import.meta.env.VITE_API_KEY || process.env.API_KEY;
-    
-    if (key && key.length > 10) {
-       setApiKeyStatus('ok');
-       setKeyLength(key.length);
-    } else {
-       setApiKeyStatus('missing');
-    }
+    checkKeyStatus();
   }, []);
+
+  const checkKeyStatus = () => {
+    // 1. Check LocalStorage
+    const local = localStorage.getItem('gemini_api_key');
+    if (local && local.length > 5) {
+       setKeySource('manual');
+       setManualKey(local); // Pre-fill input
+       setKeyStatus('ok');
+       return;
+    }
+
+    // 2. Check Vite Env
+    // @ts-ignore
+    const viteKey = import.meta.env.VITE_API_KEY;
+    if (viteKey && viteKey.length > 5) {
+       setKeySource('vite');
+       setKeyStatus('ok');
+       return;
+    }
+
+    // 3. Check Process Env (Fallback)
+    if (process.env.API_KEY && process.env.API_KEY.length > 5) {
+       setKeySource('vite'); // Treat as system env
+       setKeyStatus('ok');
+       return;
+    }
+
+    setKeyStatus('missing');
+    setKeySource('none');
+  };
+
+  const handleSaveManualKey = () => {
+    if (manualKey.trim().length < 10 && manualKey.trim().length > 0) {
+       alert("A chave parece muito curta. Verifique se copiou corretamente.");
+       return;
+    }
+    
+    if (manualKey.trim() === '') {
+       localStorage.removeItem('gemini_api_key');
+       alert("Chave manual removida. O sistema tentará usar a variável de ambiente.");
+    } else {
+       localStorage.setItem('gemini_api_key', manualKey.trim());
+       alert("Chave manual salva! O sistema usará esta chave para todas as operações de IA.");
+    }
+    checkKeyStatus();
+  };
 
   const handleChange = (field: keyof SiteSettings, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -69,28 +107,49 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
          <p className="text-gray-500">Ajuste os detalhes globais da plataforma.</p>
        </div>
 
-       {/* DIAGNOSTICS PANEL */}
-       <div className={`p-6 rounded-2xl border mb-8 flex items-center justify-between shadow-sm ${apiKeyStatus === 'ok' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-          <div className="flex items-center gap-4">
-             <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${apiKeyStatus === 'ok' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {apiKeyStatus === 'ok' ? '✓' : '✕'}
-             </div>
-             <div>
-                <h3 className={`font-black text-lg ${apiKeyStatus === 'ok' ? 'text-green-800' : 'text-red-800'}`}>
-                   Status da API Key (IA)
-                </h3>
-                <p className={`text-sm ${apiKeyStatus === 'ok' ? 'text-green-700' : 'text-red-700'}`}>
-                   {apiKeyStatus === 'checking' && 'Verificando...'}
-                   {apiKeyStatus === 'ok' && `Conectado! Chave detectada (${keyLength} caracteres).`}
-                   {apiKeyStatus === 'missing' && 'Chave VITE_API_KEY não encontrada. A IA não funcionará.'}
-                </p>
-             </div>
+       {/* DIAGNOSTICS & KEY MANAGER */}
+       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-8 space-y-6">
+          <div className="flex items-center justify-between">
+             <h3 className="font-bold text-pop-dark uppercase text-sm">Status da Conexão IA (Gemini)</h3>
+             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${keyStatus === 'ok' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {keyStatus === 'ok' ? 'Conectado' : 'Desconectado'}
+             </span>
           </div>
-          {apiKeyStatus === 'missing' && (
-             <div className="text-xs bg-white px-3 py-2 rounded border border-red-100 text-red-500 font-mono">
-                configure VITE_API_KEY no Netlify
+
+          <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+             <div className="flex items-center gap-2 mb-2">
+                <div className={`w-3 h-3 rounded-full ${keySource === 'manual' ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+                <span className="text-sm font-medium text-gray-600">Fonte: {keySource === 'manual' ? 'Chave Manual (Navegador)' : keySource === 'vite' ? 'Variável de Ambiente (Servidor)' : 'Nenhuma'}</span>
              </div>
-          )}
+             
+             {keyStatus === 'missing' && (
+                <p className="text-xs text-red-500 font-bold mt-2">
+                   ⚠️ Nenhuma chave encontrada. A geração de receitas não funcionará. Adicione uma chave abaixo.
+                </p>
+             )}
+          </div>
+
+          <div>
+             <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Chave de API Manual (Override)</label>
+             <div className="flex gap-2">
+                <input 
+                  type="password" 
+                  value={manualKey}
+                  onChange={e => setManualKey(e.target.value)}
+                  placeholder="Cole sua chave AIza... aqui"
+                  className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl focus:border-pop-dark outline-none font-mono text-sm"
+                />
+                <button 
+                  onClick={handleSaveManualKey}
+                  className="px-6 py-3 bg-pop-dark text-white font-bold rounded-xl hover:bg-black transition-colors"
+                >
+                   Salvar Chave
+                </button>
+             </div>
+             <p className="text-[10px] text-gray-400 mt-2">
+                Essa chave será salva no seu navegador e terá prioridade sobre a configuração do Netlify. Use isso se a configuração automática falhar.
+             </p>
+          </div>
        </div>
 
        <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-8">

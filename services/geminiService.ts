@@ -3,20 +3,32 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Recipe, WebStory, NutritionalAnalysis, ReelScript, ChatMessage, DietPlan } from "../types";
 import { storageService } from "./storageService";
 
-// Helper to get the key from Vite env or fallback
+// Helper to get the key: Priority 1: LocalStorage (Manual), 2: Vite Env, 3: Process Env
 const getApiKey = (): string => {
-  // @ts-ignore: Vite specific syntax
-  return import.meta.env.VITE_API_KEY || process.env.API_KEY || '';
+  // 1. Manual Override from Settings
+  try {
+    const localKey = localStorage.getItem('gemini_api_key');
+    if (localKey && localKey.trim().length > 0) return localKey.trim();
+  } catch (e) {
+    // Ignore access errors
+  }
+
+  // 2. Vite Environment Variable
+  // @ts-ignore
+  if (import.meta.env && import.meta.env.VITE_API_KEY) {
+    // @ts-ignore
+    return import.meta.env.VITE_API_KEY;
+  }
+
+  // 3. Fallback/Standard Env
+  return process.env.API_KEY || '';
 };
 
 // Prevent crash if API_KEY is missing, though API calls will fail gracefully later
 const createAI = () => {
   const key = getApiKey();
   if (!key) {
-    console.warn("⚠️ [GeminiService] VITE_API_KEY is missing or empty. AI features will fail.");
-  } else {
-    // Log masked key for verification
-    console.log(`✅ [GeminiService] API_KEY loaded. Length: ${key.length}. Start: ${key.substring(0,4)}...`);
+    console.warn("⚠️ [GeminiService] API_KEY is missing. AI features will fail. Please configure in Settings.");
   }
   return new GoogleGenAI({ apiKey: key });
 };
