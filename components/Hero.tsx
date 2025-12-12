@@ -19,17 +19,15 @@ export const Hero: React.FC<HeroProps> = ({ recipes = [], settings, language, on
     let pool = recipes;
 
     // 1. Check if user has explicitly selected recipes in Dashboard
-    // Using optional chaining safety and checking length
     if (settings?.heroRecipeIds && Array.isArray(settings.heroRecipeIds) && settings.heroRecipeIds.length > 0) {
        const selectedRecipes = recipes.filter(r => settings.heroRecipeIds!.includes(r.id));
        
-       // Only update pool if we actually found the selected recipes (ids match)
        if (selectedRecipes.length > 0) {
          pool = selectedRecipes;
        }
     }
 
-    // 2. If only one recipe is available (either total or because only 1 was selected), show it fixed.
+    // 2. If only one recipe is available
     if (pool.length === 1) {
       return pool[0];
     }
@@ -41,34 +39,36 @@ export const Hero: React.FC<HeroProps> = ({ recipes = [], settings, language, on
   }, [recipes, settings]);
 
   if (!heroRecipe) {
-     // Loading or Empty State
-     return <div className="h-[500px] bg-pop-gray/30 animate-pulse"></div>;
+     return <div className="h-[400px] md:h-[500px] bg-pop-gray/30 animate-pulse"></div>;
   }
 
   return (
-    <div className="relative bg-pop-gray/30 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-16 md:pt-16 md:pb-20">
+    <div className="relative bg-pop-gray/30 overflow-hidden content-visibility-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-12 md:pt-16 md:pb-20">
         
-        {/* Magazine Layout: Image + Content Overlap */}
-        <div className="relative rounded-3xl overflow-hidden bg-white shadow-xl shadow-gray-200/50 grid md:grid-cols-12 min-h-[500px]">
+        {/* Magazine Layout */}
+        <div className="relative rounded-3xl overflow-hidden bg-white shadow-xl shadow-gray-200/50 grid md:grid-cols-12 min-h-[400px] md:min-h-[500px]">
           
           {/* Image Side (Right on Desktop) */}
           <div 
-            className="md:col-span-7 relative h-64 md:h-full order-1 md:order-2 cursor-pointer group"
+            className="md:col-span-7 relative h-56 md:h-full order-1 md:order-2 cursor-pointer group"
             onClick={() => onOpenRecipe(heroRecipe)}
           >
             <img 
               src={heroRecipe.imageUrl} 
               className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
               alt={heroRecipe.title}
+              loading="eager"
+              decoding="sync"
+              fetchPriority="high"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 md:bg-gradient-to-l md:from-transparent md:to-white/10 to-transparent opacity-60"></div>
           </div>
 
           {/* Content Side (Left) */}
-          <div className="md:col-span-5 relative z-10 p-8 md:p-12 flex flex-col justify-center order-2 md:order-1 bg-white">
-             <div className="inline-flex items-center gap-2 mb-4">
-                <span className="px-3 py-1 rounded-full bg-pop-yellow text-white text-[10px] font-black uppercase tracking-widest shadow-sm">
+          <div className="md:col-span-5 relative z-10 p-6 md:p-12 flex flex-col justify-center order-2 md:order-1 bg-white">
+             <div className="inline-flex items-center gap-2 mb-3 md:mb-4">
+                <span className="px-2 py-1 md:px-3 rounded-full bg-pop-yellow text-white text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-sm">
                   {heroRecipe.tags[0] || t(language, 'highlight')}
                 </span>
                 <span className="text-xs font-bold text-gray-400 flex items-center gap-1">
@@ -78,39 +78,29 @@ export const Hero: React.FC<HeroProps> = ({ recipes = [], settings, language, on
              </div>
 
              <h1 
-               className="text-4xl md:text-5xl font-black text-pop-dark leading-[1.1] mb-6 font-serif line-clamp-3 cursor-pointer hover:text-pop-red transition-colors"
+               className="text-3xl md:text-5xl font-black text-pop-dark leading-[1.1] mb-4 md:mb-6 font-serif line-clamp-3 cursor-pointer hover:text-pop-red transition-colors"
                onClick={() => onOpenRecipe(heroRecipe)}
              >
                {heroRecipe.title}
              </h1>
 
-             <p className="text-gray-500 text-lg mb-8 leading-relaxed font-serif italic line-clamp-3">
+             <p className="text-gray-500 text-sm md:text-lg mb-6 md:mb-8 leading-relaxed font-serif italic line-clamp-3">
                "{heroRecipe.description}"
              </p>
 
              <div className="flex items-center gap-4">
                 <button 
                   onClick={() => onOpenRecipe(heroRecipe)}
-                  className="px-8 py-3.5 bg-pop-dark text-white rounded-xl font-bold text-sm uppercase tracking-wide shadow-lg shadow-gray-300 hover:bg-pop-red transition-all transform hover:-translate-y-0.5"
+                  className="px-6 py-3 md:px-8 md:py-3.5 bg-pop-dark text-white rounded-xl font-bold text-xs md:text-sm uppercase tracking-wide shadow-lg shadow-gray-300 hover:bg-pop-red transition-all transform hover:-translate-y-0.5 w-full md:w-auto text-center"
                 >
                   {t(language, 'heroCta')}
                 </button>
-                
-                <div className="flex -space-x-2 border-l border-gray-100 pl-4 ml-2">
-                   {/* Simulated Avatar for social proof */}
-                   <div className="w-8 h-8 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-gray-500">
-                     RP
-                   </div>
-                   <div className="w-8 h-8 rounded-full bg-pop-yellow border-2 border-white flex items-center justify-center text-[10px] font-bold text-white">
-                     ★
-                   </div>
-                </div>
              </div>
           </div>
         </div>
 
         {/* Quick Stats Bar - Fixed Icons */}
-        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 hidden md:grid">
            {[
              { 
                label: t(language, 'totalRecipes'), 

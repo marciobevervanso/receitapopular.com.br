@@ -8,16 +8,14 @@ interface RecipeCardProps {
   onClick: () => void;
 }
 
-export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onClick }) => {
-  // Local state for interactions
+// React.memo prevents the card from re-rendering unless its props (recipe) change.
+// This significantly boosts performance in large lists/grids.
+export const RecipeCard = React.memo(({ recipe, onClick }: RecipeCardProps) => {
   const [liked, setLiked] = useState(false);
-  // Use lazy initialization to avoid recalculating random numbers on every render
   const [likeCount, setLikeCount] = useState(() => Math.floor(Math.random() * 50) + 12);
-  
   const [saved, setSaved] = useState(false);
   const [saveCount, setSaveCount] = useState(() => Math.floor(Math.random() * 100) + 45);
 
-  // Check persistent favorite state on mount
   useEffect(() => {
     setSaved(storageService.isFavorite(recipe.id));
   }, [recipe.id]);
@@ -34,11 +32,8 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onClick }) => {
 
   const handleSave = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Toggle in storage
     const newStatus = storageService.toggleFavorite(recipe.id);
     setSaved(newStatus);
-    
-    // Simulate count update
     if (newStatus) {
       setSaveCount(c => c + 1);
     } else {
@@ -49,26 +44,33 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onClick }) => {
   return (
     <div 
       onClick={onClick}
-      className="group cursor-pointer flex flex-col"
+      className="group cursor-pointer flex flex-col h-full transform transition-transform duration-300 will-change-transform"
     >
       {/* Image Container */}
-      <div className="relative overflow-hidden rounded-2xl aspect-[4/3] mb-5 shadow-sm transition-all duration-500 group-hover:shadow-card bg-gray-100">
+      <div className={`relative overflow-hidden rounded-2xl aspect-[4/3] mb-5 shadow-sm transition-all duration-500 group-hover:shadow-card bg-gray-100 ${saved ? 'ring-4 ring-pop-yellow/50 ring-offset-2' : ''}`}>
         <img 
           src={recipe.imageUrl} 
           alt={recipe.title} 
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+          loading="lazy"
+          decoding="async"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+          className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-110"
         />
         
-        {/* Gradient Overlay for text readability */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-60 group-hover:opacity-40 transition-opacity"></div>
         
-        {/* Top Left: Time Badge */}
+        {/* Badge Favorito - Aparece quando salvo */}
+        {saved && (
+           <div className="absolute top-3 left-1/2 transform -translate-x-1/2 bg-pop-yellow text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg z-20 animate-fade-in">
+              Favorito
+           </div>
+        )}
+
         <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-lg text-xs font-bold text-pop-dark shadow-sm z-10 flex items-center gap-1">
            <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
            {recipe.prepTime}
         </div>
 
-        {/* Top Right: Save Button */}
         <button 
           onClick={handleSave}
           className={`absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-md transition-all duration-300 z-20 active:scale-95 ${
@@ -84,7 +86,6 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onClick }) => {
           <span className="text-xs font-bold">{saveCount}</span>
         </button>
 
-        {/* Bottom Right: Like Button */}
         <button 
           onClick={handleLike}
           className={`absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full shadow-lg backdrop-blur-md transition-all duration-300 z-20 active:scale-95 ${
@@ -100,9 +101,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onClick }) => {
         </button>
       </div>
       
-      {/* Content Area */}
-      <div className="flex flex-col gap-2 px-1">
-        {/* Meta Line */}
+      <div className="flex flex-col gap-2 px-1 flex-1">
         <div className="flex items-center justify-between text-xs font-bold tracking-wider uppercase text-gray-400">
            <span className="text-pop-red">{recipe.tags[0] || 'Geral'}</span>
            <span className="flex items-center gap-1">
@@ -111,16 +110,17 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onClick }) => {
            </span>
         </div>
         
-        {/* Title */}
-        <h3 className="text-xl md:text-2xl font-serif font-bold text-pop-dark leading-snug group-hover:text-pop-red transition-colors">
-          {recipe.title}
+        <h3 className="text-xl md:text-2xl font-serif font-bold text-pop-dark leading-snug group-hover:text-pop-red transition-colors flex items-start gap-2">
+          <span className="flex-1 line-clamp-2">{recipe.title}</span>
+          {saved && (
+            <span className="text-pop-yellow text-xl animate-[pulse_3s_infinite] shrink-0" title="Receita Favorita">★</span>
+          )}
         </h3>
         
-        {/* Description */}
         <p className="text-gray-500 text-sm leading-relaxed font-sans line-clamp-2 mt-1">
           {recipe.description}
         </p>
       </div>
     </div>
   );
-};
+});

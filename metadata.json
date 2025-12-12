@@ -1,5 +1,7 @@
 {
   "name": "Receita Popular",
   "description": "O seu guia definitivo de gastronomia. Importe receitas, organize seus ingredientes e cozinhe com estilo.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera"
+  ]
 }

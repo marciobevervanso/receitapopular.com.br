@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Recipe } from '../types';
 import { RecipeCard } from './RecipeCard';
 
@@ -14,6 +14,15 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
   onOpenRecipe, 
   onBack 
 }) => {
+  const [visibleCount, setVisibleCount] = useState(12);
+
+  const visibleRecipes = recipes.slice(0, visibleCount);
+  const hasMore = visibleCount < recipes.length;
+
+  const handleLoadMore = () => {
+    setVisibleCount(prev => prev + 12);
+  };
+
   return (
     <div className="min-h-screen bg-white animate-fade-in pb-20">
       
@@ -36,7 +45,7 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
           </p>
           
           <div className="mt-8 flex justify-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
-             <span>{recipes.length} Receitas Salvas</span>
+             <span>{visibleRecipes.length} de {recipes.length} Receitas Salvas</span>
           </div>
         </div>
       </div>
@@ -44,15 +53,28 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
       {/* Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {recipes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
-            {recipes.map((recipe) => (
-              <RecipeCard 
-                key={recipe.id} 
-                recipe={recipe} 
-                onClick={() => onOpenRecipe(recipe)} 
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
+              {visibleRecipes.map((recipe) => (
+                <RecipeCard 
+                  key={recipe.id} 
+                  recipe={recipe} 
+                  onClick={() => onOpenRecipe(recipe)} 
+                />
+              ))}
+            </div>
+
+            {hasMore && (
+              <div className="mt-16 text-center">
+                <button 
+                  onClick={handleLoadMore}
+                  className="px-8 py-4 bg-white border-2 border-gray-200 text-gray-600 font-bold rounded-full hover:border-pop-dark hover:text-pop-dark hover:bg-gray-50 transition-all shadow-sm active:scale-95 uppercase tracking-widest text-xs"
+                >
+                  Carregar Mais
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-20 bg-gray-50 rounded-3xl border border-gray-100 border-dashed">
              <div className="text-6xl mb-6">❤️</div>

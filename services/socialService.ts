@@ -1,4 +1,3 @@
-
 import { Recipe } from "../types";
 
 /**
@@ -71,6 +70,33 @@ ${finalHashtags}`;
 
   } catch (error) {
     console.error("Social Publish Error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Triggers the n8n webhook to generate and post a meme based on a payload.
+ * Accepts any object to allow matching complex n8n structures (like WordPress packet simulation).
+ */
+export const generateMeme = async (payload: any, webhookUrl: string): Promise<boolean> => {
+  if (!webhookUrl) throw new Error("Webhook de Memes não configurado.");
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Erro ao gerar meme: ${response.statusText}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Meme Generation Error:", error);
     throw error;
   }
 };

@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Recipe } from '../types';
 import { RecipeCard } from './RecipeCard';
 
@@ -17,10 +18,24 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({
   onOpenRecipe, 
   onBack 
 }) => {
+  const [visibleCount, setVisibleCount] = useState(12);
+
+  // Reset pagination when category changes
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [categoryName]);
+
   // Filter logic: Match category name with tags (case insensitive partial match)
   const filteredRecipes = recipes.filter(r => 
     r.tags.some(tag => categoryName.toLowerCase().includes(tag.toLowerCase()) || tag.toLowerCase().includes(categoryName.toLowerCase()))
   );
+
+  const visibleRecipes = filteredRecipes.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredRecipes.length;
+
+  const handleLoadMore = () => {
+    setVisibleCount(prev => prev + 12);
+  };
 
   return (
     <div className="min-h-screen bg-white animate-fade-in pb-20">
@@ -60,7 +75,7 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({
       <div className="border-b border-gray-100 bg-white sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
            <div className="text-sm font-medium text-gray-500">
-             Mostrando <span className="font-bold text-pop-dark">{filteredRecipes.length}</span> receitas em <span className="font-bold text-pop-dark">{categoryName}</span>
+             Mostrando <span className="font-bold text-pop-dark">{visibleRecipes.length}</span> de <span className="font-bold text-pop-dark">{filteredRecipes.length}</span> receitas em <span className="font-bold text-pop-dark">{categoryName}</span>
            </div>
            <div className="hidden md:flex gap-4">
               <select className="bg-transparent text-sm font-bold text-gray-600 focus:outline-none cursor-pointer">
@@ -75,15 +90,28 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({
       {/* Recipe Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {filteredRecipes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
-            {filteredRecipes.map((recipe) => (
-              <RecipeCard 
-                key={recipe.id} 
-                recipe={recipe} 
-                onClick={() => onOpenRecipe(recipe)} 
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8 lg:gap-10">
+              {visibleRecipes.map((recipe) => (
+                <RecipeCard 
+                  key={recipe.id} 
+                  recipe={recipe} 
+                  onClick={() => onOpenRecipe(recipe)} 
+                />
+              ))}
+            </div>
+
+            {hasMore && (
+              <div className="mt-16 text-center">
+                <button 
+                  onClick={handleLoadMore}
+                  className="px-8 py-4 bg-white border-2 border-gray-200 text-gray-600 font-bold rounded-full hover:border-pop-dark hover:text-pop-dark hover:bg-gray-50 transition-all shadow-sm active:scale-95 uppercase tracking-widest text-xs"
+                >
+                  Carregar Mais Receitas
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-20 bg-gray-50 rounded-3xl border border-gray-100 border-dashed">
              <div className="text-6xl mb-6">👨‍🍳</div>

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Recipe } from '../types';
 import { RecipeCard } from './RecipeCard';
 
@@ -14,6 +14,15 @@ export const AllRecipesPage: React.FC<AllRecipesPageProps> = ({
   onOpenRecipe, 
   onBack 
 }) => {
+  const [visibleCount, setVisibleCount] = useState(12);
+
+  const visibleRecipes = recipes.slice(0, visibleCount);
+  const hasMore = visibleCount < recipes.length;
+
+  const handleLoadMore = () => {
+    setVisibleCount(prev => prev + 12);
+  };
+
   return (
     <div className="min-h-screen bg-white animate-fade-in pb-20">
       
@@ -36,7 +45,7 @@ export const AllRecipesPage: React.FC<AllRecipesPageProps> = ({
           </p>
           
           <div className="mt-8 flex justify-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
-             <span>{recipes.length} Receitas Publicadas</span>
+             <span>Mostrando {visibleRecipes.length} de {recipes.length} Receitas</span>
              <span>•</span>
              <span>Atualizado Hoje</span>
           </div>
@@ -46,7 +55,7 @@ export const AllRecipesPage: React.FC<AllRecipesPageProps> = ({
       {/* Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-16">
-          {recipes.map((recipe) => (
+          {visibleRecipes.map((recipe) => (
             <RecipeCard 
               key={recipe.id} 
               recipe={recipe} 
@@ -54,6 +63,17 @@ export const AllRecipesPage: React.FC<AllRecipesPageProps> = ({
             />
           ))}
         </div>
+
+        {hasMore && (
+          <div className="mt-16 text-center">
+            <button 
+              onClick={handleLoadMore}
+              className="px-8 py-4 bg-white border-2 border-gray-200 text-gray-600 font-bold rounded-full hover:border-pop-dark hover:text-pop-dark hover:bg-gray-50 transition-all shadow-sm active:scale-95 uppercase tracking-widest text-xs"
+            >
+              Carregar Mais
+            </button>
+          </div>
+        )}
 
         {recipes.length === 0 && (
            <div className="text-center py-20">

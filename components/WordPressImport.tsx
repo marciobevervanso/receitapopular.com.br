@@ -2,34 +2,36 @@
 import React, { useState, useEffect } from 'react';
 import { WordPressPost, Recipe, Category } from '../types';
 import { fetchLatestPosts, stripHtml } from '../services/wordpressService';
-import { convertWordPressToRecipe, generateRecipeImage } from '../services/geminiService';
+import { convertWordPressToRecipe, generateRecipeImage, identifyUtensils } from '../services/geminiService';
 import { fetchAffiliateLinks } from '../services/affiliateService';
 import { storageService } from '../services/storageService';
 
 interface ImportProps {
-  onImportSuccess: (recipe: Recipe) => void;
+  onImportSuccess: (recipe: Recipe, skipGlobalLoading?: boolean) => Promise<void>;
   categories: Category[];
-  existingRecipes?: Recipe[]; // New Prop
+  existingRecipes?: Recipe[];
 }
 
 export const WordPressImport: React.FC<ImportProps> = ({ onImportSuccess, categories, existingRecipes = [] }) => {
   const [url, setUrl] = useState('receitapopular.com.br');
   const [posts, setPosts] = useState<WordPressPost[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // Progress State
-  const [convertingId, setConvertingId] = useState<number | null>(null);
-  const [progressStage, setProgressStage] = useState<string>('');
-  const [progressPercent, setProgressPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if(url) handleFetch();
-  }, []);
+  // Selection State
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  // Batch Progress State
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progressStatus, setProgressStatus] = useState('');
+  const [progressCurrent, setProgressCurrent] = useState(0);
+  const [progressTotal, setProgressTotal] = useState(0);
+  const [currentRecipeName, setCurrentRecipeName] = useState('');
 
   const handleFetch = async () => {
     setLoading(true);
     setError(null);
+    setSelectedIds(new Set()); // Reset selection on new fetch
     try {
       const data = await fetchLatestPosts(url);
       setPosts(data);
@@ -40,216 +42,246 @@ export const WordPressImport: React.FC<ImportProps> = ({ onImportSuccess, catego
     }
   };
 
-  const handleConvert = async (post: WordPressPost) => {
-    // 1. Immediate Visual Feedback
-    setConvertingId(post.id);
-    setProgressPercent(5);
-    setProgressStage('Iniciando importação...');
-    
-    try {
-      // Small delay to allow UI to update
-      await new Promise(r => setTimeout(r, 100));
+  const toggleSelect = (id: number) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
 
-      // 2. Generate Text Structure
-      setProgressStage('Lendo conteúdo e analisando com IA...');
-      setProgressPercent(20);
+  const toggleSelectAll = () => {
+    if (selectedIds.size === posts.length) {
+      setSelectedIds(new Set());
+    } else {
+      const allIds = posts.map(p => p.id);
+      setSelectedIds(new Set(allIds));
+    }
+  };
+
+  // Core logic to process a SINGLE post
+  const processSinglePost = async (post: WordPressPost) => {
+    try {
+      setCurrentRecipeName(stripHtml(post.title.rendered));
+      setProgressStatus('Lendo e analisando com IA...');
       
       const fullContent = `${post.title.rendered} \n ${post.content.rendered}`;
       const categoryNames = categories.map(c => c.name);
       
-      // Call IA with existing categories to classify correctly
-      const partialRecipe: any = await convertWordPressToRecipe(fullContent, post.title.rendered, categoryNames);
+      // 1. Convert Text
+      let partialRecipe: any = await convertWordPressToRecipe(fullContent, post.title.rendered, categoryNames);
       
-      // 2.1 Enrich with Affiliate Links (NEW STEP)
-      setProgressStage('Buscando ofertas e gerando links (Shopee)...');
-      setProgressPercent(40);
-      
+      // 2. Enrich Affiliates (Explicit Logic)
+      setProgressStatus('Buscando ofertas (Shopee)...');
       try {
         const settings = await storageService.getSettings();
-        if (settings.n8nWebhookUrl && partialRecipe.affiliates && partialRecipe.affiliates.length > 0) {
-           const enrichedAffiliates = await fetchAffiliateLinks(partialRecipe.affiliates, settings.n8nWebhookUrl);
+        if (settings.n8nWebhookUrl) {
+           let utensils = partialRecipe.affiliates || [];
            
-           // Update affiliates if we got results
-           if (enrichedAffiliates.length > 0) {
-              partialRecipe.affiliates = enrichedAffiliates;
+           // Se a IA não retornou afiliados na primeira passada, tenta identificar explicitamente
+           if (utensils.length === 0) {
+              // Simula um objeto recipe parcial para a função identifyUtensils
+              utensils = await identifyUtensils(partialRecipe as Recipe);
+           }
+
+           if (utensils.length > 0) {
+              const enrichedAffiliates = await fetchAffiliateLinks(utensils, settings.n8nWebhookUrl);
+              if (enrichedAffiliates.length > 0) {
+                 partialRecipe.affiliates = enrichedAffiliates;
+              }
            }
         }
       } catch (affErr) {
-        console.warn("Affiliate enrichment failed, skipping...", affErr);
-        // Continue without failing the whole import
+        console.warn("Affiliate enrichment failed", affErr);
       }
 
-      setProgressStage('Escrevendo receita e categorizando...');
-      setProgressPercent(50);
-      
       // 3. Generate Image
-      setProgressStage('Gerando fotografia culinária profissional (IA)...');
-      
+      setProgressStatus('Gerando fotografia culinária...');
       let imageUrl = "https://images.unsplash.com/photo-1495521821378-860fa0171913?q=80&w=1000&auto=format&fit=crop";
       
       if (partialRecipe.visualDescription) {
          try {
             imageUrl = await generateRecipeImage(partialRecipe.visualDescription);
          } catch (imgErr) {
-            console.warn("Image generation failed, using placeholder", imgErr);
+            console.warn("Image generation failed", imgErr);
          }
       }
-      
-      setProgressPercent(80);
 
       // 4. Save
-      setProgressStage('Salvando no banco de dados...');
+      setProgressStatus('Salvando receita...');
       const fullRecipe: Recipe = {
         ...partialRecipe,
         id: post.id.toString(),
-        // CRITICAL: Preserve the exact slug from WordPress for SEO continuity
         slug: post.slug, 
         imageUrl: imageUrl,
         originalLink: post.link,
         status: 'published'
       };
 
-      await onImportSuccess(fullRecipe);
-      
-      setProgressPercent(100);
-      setProgressStage('Concluído com Sucesso!');
-      
-      // Delay to show completion before closing
-      await new Promise(r => setTimeout(r, 1000));
+      // PASS TRUE TO SKIP GLOBAL LOADING AND PREVENT UNMOUNT/RELOAD
+      await onImportSuccess(fullRecipe, true);
+      return true;
 
     } catch (err) {
-      console.error(err);
-      alert("Erro ao converter. Tente novamente.");
-    } finally {
-      setConvertingId(null);
-      setProgressStage('');
-      setProgressPercent(0);
+      console.error(`Failed to import post ${post.id}`, err);
+      return false;
     }
   };
 
-  return (
-    <div className="max-w-4xl mx-auto animate-fade-in relative">
+  const handleBatchImport = async () => {
+    if (selectedIds.size === 0) return;
+
+    setIsProcessing(true);
+    setProgressTotal(selectedIds.size);
+    setProgressCurrent(0);
+
+    const idsToProcess = Array.from(selectedIds);
+    let successCount = 0;
+
+    for (let i = 0; i < idsToProcess.length; i++) {
+      const id = idsToProcess[i];
+      const post = posts.find(p => p.id === id);
       
-      {/* Progress Overlay Modal - Fixed Z-Index and Position */}
-      {convertingId !== null && (
-        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-           <div className="bg-white rounded-3xl p-10 max-w-md w-full text-center shadow-2xl border border-gray-100 transform scale-100 animate-fade-in">
+      if (post) {
+        // Update UI
+        setProgressCurrent(i + 1);
+        
+        // Process
+        const success = await processSinglePost(post);
+        if (success) successCount++;
+        
+        // Small delay to let UI breathe
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+
+    setIsProcessing(false);
+    alert(`Importação concluída! ${successCount} de ${idsToProcess.length} receitas foram importadas com sucesso.`);
+    setSelectedIds(new Set()); // Clear selection
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto animate-fade-in relative pb-20">
+      
+      {/* Batch Progress Modal */}
+      {isProcessing && (
+        <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl text-center">
+              <div className="w-16 h-16 border-4 border-pop-gray border-t-pop-green rounded-full animate-spin mx-auto mb-6"></div>
+              <h3 className="text-2xl font-black text-pop-dark mb-2">Importando Receitas...</h3>
+              <p className="text-gray-500 mb-6 font-medium line-clamp-1">{currentRecipeName}</p>
               
-              <div className="w-20 h-20 mx-auto mb-8 relative">
-                 <div className="absolute inset-0 border-4 border-gray-100 rounded-full"></div>
+              {/* Progress Bar */}
+              <div className="w-full bg-gray-100 rounded-full h-4 mb-2 overflow-hidden">
                  <div 
-                    className="absolute inset-0 border-4 border-pop-green rounded-full border-t-transparent animate-spin"
-                    style={{ animationDuration: '1s' }}
-                 ></div>
-                 <div className="absolute inset-0 flex items-center justify-center font-black text-lg text-pop-dark">
-                    {progressPercent}%
-                 </div>
-              </div>
-
-              <h3 className="text-2xl font-black text-pop-dark mb-2">Importando Receita</h3>
-              <p className="text-pop-red font-bold text-sm uppercase tracking-widest mb-8 animate-pulse">
-                 {progressStage}
-              </p>
-
-              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden mb-2">
-                 <div 
-                   className="h-full bg-gradient-to-r from-pop-yellow to-pop-green transition-all duration-500 ease-out"
-                   style={{ width: `${progressPercent}%` }}
+                   className="bg-pop-green h-full transition-all duration-500 ease-out" 
+                   style={{ width: `${(progressCurrent / progressTotal) * 100}%` }}
                  ></div>
               </div>
-              <p className="text-xs text-gray-400 mt-2">Por favor, aguarde. Estamos criando o conteúdo.</p>
+              <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest mt-3">
+                 <span>{progressStatus}</span>
+                 <span>{progressCurrent} / {progressTotal}</span>
+              </div>
            </div>
         </div>
       )}
 
-      <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden mb-8">
-        <div className="bg-pop-dark p-8 text-center relative overflow-hidden">
-           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-pop-dark to-gray-900 z-0"></div>
-           <div className="relative z-10">
-              <div className="w-12 h-12 bg-pop-red rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-red-900/50 rotate-3">
-                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-              </div>
-              <h2 className="text-2xl font-extrabold text-white mb-1">Migrador de Conteúdo</h2>
-              <p className="text-gray-400 text-sm">Importação massiva do WordPress com preservação de SEO.</p>
-           </div>
-        </div>
+      <div className="mb-8">
+        <h2 className="text-3xl font-extrabold text-pop-dark">Importar do WordPress</h2>
+        <p className="text-gray-500">Migre receitas automaticamente usando IA para reescrever e estruturar.</p>
+      </div>
 
-        <div className="p-8">
-          <div className="flex flex-col gap-4 mb-8">
-             <label className="font-bold text-xs text-gray-500 uppercase tracking-wide">Endereço do Site (WordPress)</label>
-             <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="flex-1 px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-pop-dark focus:bg-white transition-all outline-none font-bold text-pop-dark"
-                  placeholder="receitapopular.com.br"
-                />
-                <button 
-                  onClick={handleFetch}
-                  disabled={loading}
-                  className="px-6 py-3 bg-pop-dark text-white rounded-xl font-bold hover:bg-black transition-all disabled:opacity-50 shadow-lg text-sm"
-                >
-                  {loading ? 'Buscando...' : 'Buscar Tudo'}
-                </button>
-             </div>
-          </div>
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+         <div className="flex gap-4">
+            <input 
+              type="text" 
+              value={url} 
+              onChange={e => setUrl(e.target.value)} 
+              placeholder="ex: meusite.com.br"
+              className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-pop-dark"
+            />
+            <button 
+              onClick={handleFetch} 
+              disabled={loading || isProcessing}
+              className="px-6 py-3 bg-pop-dark text-white rounded-xl font-bold hover:bg-black transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Buscando...' : 'Buscar Posts'}
+            </button>
+         </div>
+         {error && <p className="text-red-500 text-sm mt-3 font-medium">{error}</p>}
+      </div>
 
-          {error && <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm font-bold mb-6 border border-red-100">{error}</div>}
-
-          {posts.length > 0 && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="flex justify-between items-end border-b border-gray-100 pb-4 mb-4">
-                 <h3 className="font-bold text-lg text-pop-dark">Postagens Encontradas ({posts.length})</h3>
-                 <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">Status</span>
+      {posts.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+           {/* Actions Header */}
+           <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center sticky top-0 z-10">
+              <div className="flex items-center gap-4">
+                 <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-gray-600 hover:text-pop-dark">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedIds.size === posts.length && posts.length > 0}
+                      onChange={toggleSelectAll}
+                      className="w-5 h-5 rounded border-gray-300 text-pop-dark focus:ring-pop-dark"
+                    />
+                    Selecionar Tudo
+                 </label>
+                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest border-l border-gray-300 pl-4">
+                    {selectedIds.size} selecionados
+                 </span>
               </div>
               
-              <div className="max-h-[500px] overflow-y-auto custom-scrollbar pr-2 space-y-3">
-                {posts.map((post) => {
-                  const isProcessing = convertingId === post.id;
-                  // CHECK FOR EXISTING RECIPE
-                  const isImported = existingRecipes.some(r => r.slug === post.slug || r.id === post.id.toString());
+              <button 
+                onClick={handleBatchImport}
+                disabled={selectedIds.size === 0 || isProcessing}
+                className="px-6 py-2 bg-pop-green text-white rounded-lg font-bold text-sm hover:bg-green-600 shadow-md shadow-green-100 disabled:opacity-50 disabled:shadow-none transition-all flex items-center gap-2"
+              >
+                 {isProcessing ? 'Processando...' : 'Importar Selecionados'}
+                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              </button>
+           </div>
 
-                  return (
-                    <div key={post.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all bg-white group ${isProcessing ? 'border-pop-yellow bg-yellow-50' : 'border-gray-100 hover:border-pop-red/30'}`}>
-                      <div className="flex-1 min-w-0 mr-4">
-                        <h4 className="font-bold text-pop-dark text-sm group-hover:text-pop-red transition-colors truncate">{stripHtml(post.title.rendered)}</h4>
-                        <div className="flex gap-2 mt-1">
-                           <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2 py-0.5 rounded font-mono">ID: {post.id}</span>
-                           <span className="text-[10px] font-bold text-blue-400 bg-blue-50 px-2 py-0.5 rounded font-mono truncate max-w-[200px]">/{post.slug}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
+           <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto custom-scrollbar">
+              {posts.map(post => {
+                 const isImported = existingRecipes.some(r => r.slug === post.slug);
+                 const isSelected = selectedIds.has(post.id);
+
+                 return (
+                   <div key={post.id} className={`p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50/30' : ''}`}>
+                      <div className="flex items-center justify-center shrink-0">
                          {isImported ? (
-                            <span className="px-4 py-2 rounded-lg font-bold text-xs bg-green-100 text-green-600 flex items-center gap-1 border border-green-200">
-                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                               Importado
-                            </span>
+                            <div className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center" title="Já importado">
+                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                            </div>
                          ) : (
-                            <button
-                              onClick={() => handleConvert(post)}
-                              disabled={convertingId !== null}
-                              className={`px-4 py-2 rounded-lg font-bold text-xs transition-all whitespace-nowrap shadow-md flex items-center gap-2 ${
-                                isProcessing
-                                ? 'bg-pop-yellow text-white cursor-wait' 
-                                : convertingId !== null 
-                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                  : 'bg-pop-dark text-white hover:bg-black'
-                              }`}
-                            >
-                              {isProcessing ? 'Processando...' : 'Importar'}
-                            </button>
+                            <input 
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelect(post.id)}
+                              className="w-5 h-5 rounded border-gray-300 text-pop-dark focus:ring-pop-dark cursor-pointer"
+                            />
                          )}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                      
+                      <div className="flex-1 min-w-0">
+                         <h4 className={`font-bold text-sm truncate ${isImported ? 'text-gray-400' : 'text-pop-dark'}`}>
+                            {stripHtml(post.title.rendered)}
+                         </h4>
+                         <p className="text-xs text-gray-400 mt-0.5 truncate">
+                            {stripHtml(post.excerpt.rendered).substring(0, 80)}...
+                         </p>
+                      </div>
+
+                      <div className="text-xs font-mono text-gray-400 whitespace-nowrap">
+                         {new Date(post.date).toLocaleDateString('pt-BR')}
+                      </div>
+                   </div>
+                 );
+              })}
+           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

@@ -10,7 +10,7 @@ export const RecipeFAQ: React.FC<RecipeFAQProps> = ({ faqs }) => {
   if (!faqs || faqs.length === 0) return null;
 
   return (
-    <div className="mt-16 print-break-inside">
+    <div className="my-8 print-break-inside">
       <div className="flex items-center gap-3 mb-8">
         <div className="w-10 h-10 rounded-full bg-gray-100 text-pop-dark flex items-center justify-center font-serif font-bold text-xl italic">
           ?

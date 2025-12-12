@@ -1,29 +1,85 @@
 
-import { Recipe, Category, SiteSettings, WebStory } from "../types";
+import { Recipe, Category, SiteSettings, WebStory, MealPlan, RecipeSuggestion, DietPlan } from "../types";
 import { CATEGORIES as DEFAULT_CATEGORIES } from "../constants";
 import { supabase } from "./supabaseClient";
 
 // --- Helpers ---
 
-// Helper: Upload Base64 Image to Supabase Storage
-const uploadImageToSupabase = async (base64Data: string, path: string): Promise<string> => {
+// Helper: Convert Base64 string to Blob manually (More robust than fetch)
+const base64ToBlob = (base64Data: string): { blob: Blob, ext: string } => {
   try {
-    // If it's already a URL (http/https), return as is
+    // 1. Extract MIME type and data
+    const arr = base64Data.split(',');
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    
+    while(n--){
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    
+    // 2. Determine extension
+    let ext = 'png';
+    if (mime === 'image/jpeg' || mime === 'image/jpg') ext = 'jpg';
+    if (mime === 'image/webp') ext = 'webp';
+
+    return { blob: new Blob([u8arr], {type: mime}), ext };
+  } catch (e) {
+    console.error("Error converting base64 to blob", e);
+    throw new Error("Falha ao processar imagem para upload.");
+  }
+};
+
+// Helper: Upload Base64 Image to Supabase Storage
+const uploadImageInternal = async (base64Data: string, path: string): Promise<string> => {
+  try {
     if (!base64Data || base64Data.startsWith('http')) return base64Data;
 
-    // If it is a base64 string
     if (base64Data.startsWith('data:image')) {
-      // Convert Base64 to Blob
-      const res = await fetch(base64Data);
-      const blob = await res.blob();
-      const fileExt = base64Data.substring("data:image/".length, base64Data.indexOf(";base64"));
-      const fileName = `${path}-${Date.now()}.${fileExt}`;
+      
+      // Resize image if it's too large (Canvas Resize)
+      // This is crucial for performance and ensuring successful uploads
+      const resizeImage = (dataUrl: string): Promise<string> => {
+         return new Promise((resolve) => {
+            const img = new Image();
+            img.src = dataUrl;
+            img.onload = () => {
+               const canvas = document.createElement('canvas');
+               const ctx = canvas.getContext('2d');
+               
+               // Max width 1920px (Full HD)
+               const MAX_WIDTH = 1920;
+               let width = img.width;
+               let height = img.height;
 
-      // Upload
+               if (width > MAX_WIDTH) {
+                  height *= MAX_WIDTH / width;
+                  width = MAX_WIDTH;
+               }
+
+               canvas.width = width;
+               canvas.height = height;
+               ctx?.drawImage(img, 0, 0, width, height);
+               
+               // Compress to WebP 80%
+               resolve(canvas.toDataURL('image/webp', 0.8));
+            };
+            img.onerror = () => resolve(dataUrl); // Fallback to original
+         });
+      };
+
+      const resizedBase64 = await resizeImage(base64Data);
+
+      // Use the robust manual conversion
+      const { blob } = base64ToBlob(resizedBase64);
+      const fileName = `${path}-${Date.now()}.webp`; // Always save as WebP now
+
       const { data, error } = await supabase.storage
         .from('images')
         .upload(fileName, blob, {
-          contentType: `image/${fileExt}`,
+          contentType: 'image/webp',
           upsert: true
         });
 
@@ -32,24 +88,28 @@ const uploadImageToSupabase = async (base64Data: string, path: string): Promise<
         throw error;
       }
 
-      // Get Public URL
       const { data: publicUrlData } = supabase.storage
         .from('images')
         .getPublicUrl(fileName);
 
-      console.log("Image uploaded to:", publicUrlData.publicUrl);
       return publicUrlData.publicUrl;
     }
 
     return base64Data;
   } catch (error) {
     console.error("Failed to upload image, using placeholder", error);
+    // Return a fallback image if upload fails so the flow doesn't break completely
     return "https://images.unsplash.com/photo-1495521821378-860fa0171913?q=80&w=1000&auto=format&fit=crop";
   }
 };
 
 export const storageService = {
   
+  // Expose upload for external components (like MemeGenerator)
+  async uploadImage(base64Data: string, folder: string = 'misc'): Promise<string> {
+     return uploadImageInternal(base64Data, `${folder}/img`);
+  },
+
   // --- RECIPES ---
 
   async getRecipes(): Promise<Recipe[]> {
@@ -63,7 +123,6 @@ export const storageService = {
       return [];
     }
 
-    // Merge the top-level ID/Slug with the JSONB data
     return data.map((row: any) => ({
       ...row.data,
       id: row.id,
@@ -73,11 +132,9 @@ export const storageService = {
   },
 
   async saveRecipe(recipe: Recipe): Promise<void> {
-    // 1. Handle Image Upload (if needed)
-    const publicImageUrl = await uploadImageToSupabase(recipe.imageUrl, `recipes/${recipe.slug}`);
+    const publicImageUrl = await uploadImageInternal(recipe.imageUrl, `recipes/${recipe.slug}`);
     const recipeToSave = { ...recipe, imageUrl: publicImageUrl };
 
-    // 2. Save to DB
     const { error } = await supabase
       .from('recipes')
       .upsert({
@@ -91,8 +148,7 @@ export const storageService = {
   },
 
   async deleteRecipe(id: string): Promise<void> {
-    // 1. Fetch the recipe first to get the image URL
-    const { data: recipeData, error: fetchError } = await supabase
+    const { data: recipeData } = await supabase
       .from('recipes')
       .select('data')
       .eq('id', id)
@@ -100,19 +156,14 @@ export const storageService = {
 
     if (recipeData && recipeData.data && recipeData.data.imageUrl) {
       const imageUrl = recipeData.data.imageUrl;
-      // Check if the image is hosted in our bucket
       if (imageUrl.includes('/storage/v1/object/public/images/')) {
-        // Extract the path after /images/
         const path = imageUrl.split('/storage/v1/object/public/images/')[1];
         if (path) {
-          console.log("Deleting image:", path);
-          const { error: storageError } = await supabase.storage.from('images').remove([path]);
-          if (storageError) console.warn("Failed to delete image from storage:", storageError);
+          await supabase.storage.from('images').remove([path]);
         }
       }
     }
 
-    // 2. Delete the record from database
     const { error } = await supabase.from('recipes').delete().eq('id', id);
     if (error) throw error;
   },
@@ -123,16 +174,46 @@ export const storageService = {
     const { data, error } = await supabase.from('categories').select('*');
     
     if (error || !data || data.length === 0) {
-      // First run: seed default categories
       await this.saveCategories(DEFAULT_CATEGORIES.map((c, i) => ({ ...c, id: `cat-${i}` })));
       return DEFAULT_CATEGORIES.map((c, i) => ({ ...c, id: `cat-${i}` }));
+    }
+
+    // Auto-sync & Repair
+    const existingMap = new Map<string, any>(data.map((c: any) => [c.name.toLowerCase(), c]));
+    const categoriesToUpsert: any[] = [];
+
+    DEFAULT_CATEGORIES.forEach((defaultCat, i) => {
+       const existingCat = existingMap.get(defaultCat.name.toLowerCase());
+       
+       if (!existingCat) {
+          categoriesToUpsert.push({
+             id: `cat-sync-${Date.now()}-${i}`,
+             name: defaultCat.name,
+             img: defaultCat.img
+          });
+       } else if (!existingCat.img || existingCat.img === '' || existingCat.img.includes('placeholder') || defaultCat.name === 'Airfryer') {
+          categoriesToUpsert.push({
+             ...existingCat,
+             img: defaultCat.img
+          });
+       }
+    });
+
+    if (categoriesToUpsert.length > 0) {
+       await this.saveCategories(categoriesToUpsert);
+       const updatedData = [...data];
+       categoriesToUpsert.forEach(upd => {
+          const idx = updatedData.findIndex(d => d.id === upd.id);
+          if (idx >= 0) updatedData[idx] = upd;
+          else updatedData.push(upd);
+       });
+       return updatedData;
     }
 
     return data;
   },
 
   async saveCategories(categories: Category[]): Promise<void> {
-    // Upsert all categories
     const rows = categories.map(cat => ({
       id: cat.id,
       name: cat.name,
@@ -140,6 +221,45 @@ export const storageService = {
     }));
 
     const { error } = await supabase.from('categories').upsert(rows);
+    if (error) throw error;
+  },
+
+  // --- DIET PLANS ---
+  
+  async getDietPlans(): Promise<DietPlan[]> {
+    const { data, error } = await supabase
+      .from('diet_plans')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn("Error fetching diet plans (or table not created yet):", error.message);
+      return [];
+    }
+
+    return data.map((row: any) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      duration: row.duration,
+      level: row.level,
+      goal: row.goal,
+      imageUrl: row.image_url,
+      structure: row.structure,
+      category: row.category
+    }));
+  },
+
+  async updateDietPlan(plan: DietPlan): Promise<void> {
+    // Only update specific fields we might change (like image_url)
+    const { error } = await supabase
+      .from('diet_plans')
+      .update({
+        image_url: plan.imageUrl,
+        // We could update other fields if needed
+      })
+      .eq('id', plan.id);
+
     if (error) throw error;
   },
 
@@ -152,8 +272,9 @@ export const storageService = {
       siteName: 'Receita Popular',
       siteDescription: 'Gastronomia Descomplicada',
       heroRecipeIds: [],
-      n8nWebhookUrl: 'https://n8n.seureview.com.br/webhook/shopee-utensilios', 
-      n8nSocialWebhookUrl: '', // New Default
+      n8nWebhookUrl: '', 
+      n8nSocialWebhookUrl: '', 
+      banners: [],
       socialLinks: {}
     };
 
@@ -161,7 +282,6 @@ export const storageService = {
       return DEFAULT_SETTINGS;
     }
 
-    // Merge defaults with saved data to ensure new fields exist
     return { ...DEFAULT_SETTINGS, ...data.data };
   },
 
@@ -189,9 +309,8 @@ export const storageService = {
   },
 
   async saveStory(story: WebStory): Promise<void> {
-    // Upload images for each slide if they are new
     const slidesWithUrls = await Promise.all(story.slides.map(async (slide, idx) => {
-      const url = await uploadImageToSupabase(slide.imageUrl, `stories/${story.id}-${idx}`);
+      const url = await uploadImageInternal(slide.imageUrl, `stories/${story.id}-${idx}`);
       return { ...slide, imageUrl: url };
     }));
 
@@ -205,7 +324,132 @@ export const storageService = {
     if (error) throw error;
   },
 
-  // --- LOCAL STORAGE (Session Specific) ---
+  // --- MEAL PLANS ---
+  
+  getMealPlan(): MealPlan {
+    const saved = localStorage.getItem('mealPlan');
+    if (saved) return JSON.parse(saved);
+    
+    return {
+      weekId: 'current',
+      days: {
+        'mon': { day: 'mon' },
+        'tue': { day: 'tue' },
+        'wed': { day: 'wed' },
+        'thu': { day: 'thu' },
+        'fri': { day: 'fri' },
+        'sat': { day: 'sat' },
+        'sun': { day: 'sun' },
+      }
+    };
+  },
+
+  saveMealPlan(plan: MealPlan): void {
+    localStorage.setItem('mealPlan', JSON.stringify(plan));
+  },
+
+  // --- RECIPE SUGGESTIONS (SUPABASE) ---
+
+  async submitSuggestion(suggestion: RecipeSuggestion): Promise<void> {
+    try {
+      const { error } = await supabase.from('recipe_suggestions').insert({
+        dish_name: suggestion.dishName,
+        description: suggestion.description,
+        suggested_by: suggestion.suggestedBy,
+        status: 'pending'
+      });
+
+      if (error) {
+        console.error('Error submitting suggestion:', error);
+        throw error;
+      }
+    } catch (err) {
+      console.warn("Suggestion submission failed", err);
+      throw err;
+    }
+  },
+
+  async getSuggestions(): Promise<RecipeSuggestion[]> {
+    try {
+      const { data, error } = await supabase
+        .from('recipe_suggestions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        if (error.code === '42P01') { 
+           console.warn("Tabela 'recipe_suggestions' não encontrada. Funcionalidade desabilitada temporariamente.");
+           return [];
+        }
+        console.error('Error fetching suggestions:', error.message || JSON.stringify(error));
+        return [];
+      }
+
+      return data.map((row: any) => ({
+        id: row.id,
+        dishName: row.dish_name,
+        description: row.description,
+        suggestedBy: row.suggested_by,
+        date: row.created_at,
+        status: row.status as 'pending' | 'approved' | 'rejected'
+      }));
+    } catch (err) {
+      console.warn("Error fetching suggestions (unexpected):", err);
+      return [];
+    }
+  },
+
+  async deleteSuggestion(id: string): Promise<void> {
+    const { error } = await supabase.from('recipe_suggestions').delete().eq('id', id);
+    if (error) {
+      console.error('Error deleting suggestion:', error);
+      throw error;
+    }
+  },
+
+  // --- GAMIFICATION / USER STATS ---
+  
+  getUserLevel(): { title: string, level: number, xp: number } {
+    const recipesCount = parseInt(localStorage.getItem('recipesCreated') || '0');
+    const favoritesCount = JSON.parse(localStorage.getItem('favorites') || '[]').length;
+    
+    const xp = (recipesCount * 100) + (favoritesCount * 10);
+    
+    let title = "Aprendiz";
+    let level = 1;
+
+    if (xp > 1000) { title = "Master Chef"; level = 5; }
+    else if (xp > 500) { title = "Chef Executivo"; level = 4; }
+    else if (xp > 200) { title = "Sous Chef"; level = 3; }
+    else if (xp > 50) { title = "Cozinheiro"; level = 2; }
+
+    return { title, level, xp };
+  },
+
+  // --- NEWSLETTER ---
+
+  async subscribeNewsletter(email: string): Promise<void> {
+    const { error } = await supabase
+      .from('newsletter')
+      .insert({ email });
+    
+    if (error) {
+      if (error.code === '23505') throw new Error('Este email já está cadastrado.');
+      throw error;
+    }
+  },
+
+  async getSubscribers(): Promise<{email: string, created_at: string}[]> {
+    const { data, error } = await supabase
+      .from('newsletter')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) return [];
+    return data;
+  },
+
+  // --- LOCAL STORAGE ---
   
   isFavorite(recipeId: string): boolean {
     const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');

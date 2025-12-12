@@ -59,17 +59,31 @@ export const ChefBot: React.FC<ChefBotProps> = ({ recipes, onOpenRecipe }) => {
 
   // Helper to parse Markdown-like syntax from Gemini
   const formatMessage = (text: string) => {
-    // 1. Convert bold **text** to <b>text</b>
-    let formatted = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    if (!text) return '';
+
+    let formatted = text;
+
+    // 1. Sanitize (Basic) to prevent injection of malicious scripts, though we control the input mostly
+    formatted = formatted.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // 2. Headers (### Title)
+    formatted = formatted.replace(/### (.*?)\n/g, '<h3 class="text-sm font-black text-pop-red uppercase tracking-wide mt-2 mb-1">$1</h3>');
+
+    // 3. Bold (**text**) - Adding Tailwind class because default <b> might be reset
+    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="font-black text-pop-dark">$1</strong>');
     
-    // 2. Convert links [Title](/receita/slug) to internal clickable spans
-    // We use a data-slug attribute to identify internal recipe links
+    // 4. Recipe Links [Title](/receita/slug)
+    // We use a specific class and data-slug to hook into the click event
     formatted = formatted.replace(
       /\[(.*?)\]\(\/receita\/(.*?)\)/g, 
-      '<span class="text-blue-600 underline cursor-pointer font-bold hover:text-blue-800" data-slug="$2">$1</span>'
+      '<span class="inline-flex items-center gap-1 text-blue-600 underline decoration-blue-300 cursor-pointer font-bold hover:text-blue-800 bg-blue-50 px-1 rounded" data-slug="$2"><svg class="w-3 h-3 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>$1</span>'
     );
 
-    // 3. Convert newlines to <br>
+    // 5. Lists (* Item or - Item)
+    // Replace start of line bullets with HTML bullet
+    formatted = formatted.replace(/(?:^|\n)(?:[\*\-]\s+)(.*?)(?=\n|$)/g, '<div class="flex items-start gap-2 my-1 ml-1"><span class="text-pop-yellow font-bold">•</span><span>$1</span></div>');
+
+    // 6. Line Breaks (remaining newlines)
     formatted = formatted.replace(/\n/g, '<br />');
 
     return formatted;
@@ -78,15 +92,20 @@ export const ChefBot: React.FC<ChefBotProps> = ({ recipes, onOpenRecipe }) => {
   // Handle clicks on the formatted message
   const handleMessageClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    // Check if clicked element is our internal recipe link
-    if (target.tagName === 'SPAN' && target.dataset.slug) {
+    // Check if clicked element is our internal recipe link (or inside it)
+    const linkElement = target.closest('[data-slug]') as HTMLElement;
+    
+    if (linkElement && linkElement.dataset.slug) {
       e.preventDefault();
-      const slug = target.dataset.slug;
+      e.stopPropagation();
+      
+      const slug = linkElement.dataset.slug;
       const recipe = recipes.find(r => r.slug === slug);
+      
       if (recipe && onOpenRecipe) {
         onOpenRecipe(recipe);
-        // Optional: Close chat on navigation? 
-        // setIsOpen(false); 
+      } else {
+        console.warn("Recipe not found for slug:", slug);
       }
     }
   };
@@ -121,7 +140,7 @@ export const ChefBot: React.FC<ChefBotProps> = ({ recipes, onOpenRecipe }) => {
               {messages.map((msg) => (
                  <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div 
-                      className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                      className={`max-w-[90%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
                         msg.role === 'user' 
                           ? 'bg-pop-dark text-white rounded-tr-none' 
                           : 'bg-white text-gray-700 rounded-tl-none border border-gray-100'
