@@ -13,14 +13,14 @@ const getApiKey = (): string => {
     // Ignore access errors
   }
 
-  // 2. Vite Environment Variable
+  // 2. Vite Environment Variable (Standard for Vite apps)
   // @ts-ignore
   if (import.meta.env && import.meta.env.VITE_API_KEY) {
     // @ts-ignore
     return import.meta.env.VITE_API_KEY;
   }
 
-  // 3. Fallback/Standard Env
+  // 3. Fallback/Standard Env (For other build systems)
   return process.env.API_KEY || '';
 };
 
@@ -28,7 +28,7 @@ const getApiKey = (): string => {
 const createAI = () => {
   const key = getApiKey();
   if (!key) {
-    console.warn("⚠️ [GeminiService] API_KEY is missing. AI features will fail. Please configure in Settings.");
+    console.warn("⚠️ [GeminiService] API_KEY is missing. AI features will fail. Please configure VITE_API_KEY in your hosting environment.");
   }
   return new GoogleGenAI({ apiKey: key });
 };
@@ -106,7 +106,6 @@ export const generateRecipeFromIngredients = async (ingredients: string[]): Prom
 export const generateCustomDietPlan = async (userGoal: string): Promise<DietPlan> => {
   const ai = createAI();
   try {
-    // Note: Removed googleSearch tool to prevent JSON schema conflicts. Using standard knowledge.
     const prompt = `Atue como um Nutricionista e Chef Personalizado. 
     Crie um plano alimentar semanal (seg-dom, almoço e jantar) que atenda ao objetivo: "${userGoal}".
     O plano deve ser prático e usar termos de busca de receitas reais (ex: "Frango Grelhado", "Salada Caesar").
@@ -124,16 +123,19 @@ export const generateCustomDietPlan = async (userGoal: string): Promise<DietPlan
     const data = JSON.parse(cleanJson(response.text));
     
     // 2. Generate Real Image for the Plan
+    // Using Flash Image model for stability instead of Pro
     let imageUrl = 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=800&auto=format&fit=crop';
     try {
        const imgPrompt = `Healthy food photography for a meal plan: ${data.title}. ${data.description}. Fresh ingredients, balanced meal, bright lighting, 4k resolution.`;
-       const imgBase64 = await generateRecipeImage(imgPrompt); // This returns data:image/... string
-       // Upload to bucket so we have a permanent URL
+       const imgBase64 = await generateRecipeImage(imgPrompt); 
+       
        if (imgBase64.startsWith('data:')) {
           imageUrl = await storageService.uploadImage(imgBase64, 'plans');
+       } else if (imgBase64.startsWith('http')) {
+          imageUrl = imgBase64;
        }
     } catch (imgErr) {
-       console.error("Failed to generate plan image", imgErr);
+       console.error("Failed to generate plan image, using fallback", imgErr);
     }
 
     // Add default fields needed for DietPlan interface
@@ -182,44 +184,28 @@ export const remixRecipe = async (originalRecipe: Recipe, modification: string):
 
 export const generateRecipeImage = async (visualDescription: string): Promise<string> => {
   const ai = createAI();
-  const prompt = `Professional food photography: ${visualDescription}. High resolution, delicious, culinary magazine style, 4k. Cinematic lighting.`;
+  const prompt = `Food photography: ${visualDescription}. High resolution, delicious, culinary magazine style, 4k. Cinematic lighting. Realistic texture.`;
   
+  // NOTE: Changed default to 'gemini-2.5-flash-image' for better stability with standard keys.
+  // 'gemini-3-pro-image-preview' is great but can cause 403/500 errors on some accounts.
   try {
-    // 1. Try Premium Model first
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview', 
+      model: 'gemini-2.5-flash-image', 
       contents: { parts: [{ text: prompt }] },
     });
     
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
+        const mime = part.inlineData.mimeType || 'image/png';
+        return `data:${mime};base64,${part.inlineData.data}`;
       }
     }
     
-    throw new Error("No image data returned from Pro model");
+    throw new Error("No image data returned from Flash model");
 
   } catch (error: any) {
-    console.warn("Pro model failed, switching to Flash model:", error.message || error);
-    
-    // 2. Fallback to Flash Model
-    try {
-      const responseFlash = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image', // Fallback standard model
-        contents: { parts: [{ text: prompt }] },
-      });
-      
-      for (const part of responseFlash.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          const mime = part.inlineData.mimeType || 'image/png';
-          return `data:${mime};base64,${part.inlineData.data}`;
-        }
-      }
-    } catch (flashError) {
-       console.error("Flash model also failed:", flashError);
-    }
-
-    // 3. Final Fallback to Placeholder
+    console.warn("Image generation failed, using fallback:", error.message || error);
+    // Fallback to Unsplash placeholder if AI fails
     return "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=1000&auto=format&fit=crop";
   }
 };

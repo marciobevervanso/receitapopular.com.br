@@ -63,12 +63,19 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
     
     if (manualKey.trim() === '') {
        localStorage.removeItem('gemini_api_key');
-       alert("Chave manual removida. O sistema tentará usar a variável de ambiente.");
+       alert("Chave manual removida. O sistema tentará usar a variável de ambiente (Global).");
     } else {
        localStorage.setItem('gemini_api_key', manualKey.trim());
-       alert("Chave manual salva! O sistema usará esta chave para todas as operações de IA.");
+       alert("Chave manual salva APENAS NESTE NAVEGADOR! Use isso apenas para testes.");
     }
     checkKeyStatus();
+  };
+
+  const handleClearManualKey = () => {
+    localStorage.removeItem('gemini_api_key');
+    setManualKey('');
+    checkKeyStatus();
+    alert("Chave local removida. Agora usando a configuração do servidor (Global).");
   };
 
   const handleChange = (field: keyof SiteSettings, value: any) => {
@@ -110,28 +117,36 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
        {/* DIAGNOSTICS & KEY MANAGER */}
        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-8 space-y-6">
           <div className="flex items-center justify-between">
-             <h3 className="font-bold text-pop-dark uppercase text-sm">Status da Conexão IA (Gemini)</h3>
+             <h3 className="font-bold text-pop-dark uppercase text-sm">Conexão IA (Google Gemini)</h3>
              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${keyStatus === 'ok' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 {keyStatus === 'ok' ? 'Conectado' : 'Desconectado'}
              </span>
           </div>
 
-          <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+          <div className={`p-4 rounded-xl border ${keySource === 'manual' ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
              <div className="flex items-center gap-2 mb-2">
-                <div className={`w-3 h-3 rounded-full ${keySource === 'manual' ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
-                <span className="text-sm font-medium text-gray-600">Fonte: {keySource === 'manual' ? 'Chave Manual (Navegador)' : keySource === 'vite' ? 'Variável de Ambiente (Servidor)' : 'Nenhuma'}</span>
+                <div className={`w-3 h-3 rounded-full ${keySource === 'manual' ? 'bg-yellow-500' : keySource === 'vite' ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                <span className="text-sm font-bold text-gray-700">
+                    Fonte Atual: {keySource === 'manual' ? 'Chave Local (Apenas você)' : keySource === 'vite' ? 'Ambiente Global (Todos os usuários)' : 'Nenhuma'}
+                </span>
              </div>
+             
+             {keySource === 'manual' && (
+                <p className="text-xs text-yellow-700 font-medium mt-1">
+                   ⚠️ <strong>Atenção:</strong> Você está usando uma chave salva apenas no seu navegador. Visitantes do site não conseguirão usar a IA. Para disponibilizar para todos, adicione a chave <code>VITE_API_KEY</code> nas configurações de deploy (Netlify/Vercel) e clique em "Usar Global" abaixo.
+                </p>
+             )}
              
              {keyStatus === 'missing' && (
                 <p className="text-xs text-red-500 font-bold mt-2">
-                   ⚠️ Nenhuma chave encontrada. A geração de receitas não funcionará. Adicione uma chave abaixo.
+                   ⚠️ Nenhuma chave encontrada. A geração de receitas não funcionará.
                 </p>
              )}
           </div>
 
-          <div>
-             <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Chave de API Manual (Override)</label>
-             <div className="flex gap-2">
+          <div className="border-t border-gray-100 pt-4">
+             <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Override Manual (Apenas Teste)</label>
+             <div className="flex flex-col md:flex-row gap-2">
                 <input 
                   type="password" 
                   value={manualKey}
@@ -141,13 +156,21 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
                 />
                 <button 
                   onClick={handleSaveManualKey}
-                  className="px-6 py-3 bg-pop-dark text-white font-bold rounded-xl hover:bg-black transition-colors"
+                  className="px-6 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors whitespace-nowrap"
                 >
-                   Salvar Chave
+                   Salvar Localmente
                 </button>
+                {keySource === 'manual' && (
+                   <button 
+                     onClick={handleClearManualKey}
+                     className="px-6 py-3 bg-red-100 text-red-600 font-bold rounded-xl hover:bg-red-200 transition-colors whitespace-nowrap border border-red-200"
+                   >
+                      Usar Global (Apagar Local)
+                   </button>
+                )}
              </div>
              <p className="text-[10px] text-gray-400 mt-2">
-                Essa chave será salva no seu navegador e terá prioridade sobre a configuração do Netlify. Use isso se a configuração automática falhar.
+                Use este campo apenas se a configuração automática do servidor falhar ou para testes locais.
              </p>
           </div>
        </div>
@@ -298,7 +321,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
                    <input type="text" placeholder="URL do Facebook" value={formData.socialLinks.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} className="flex-1 px-4 py-2 bg-gray-50 border rounded-lg text-sm" />
                 </div>
                 <div className="flex items-center gap-4">
-                   <div className="w-8 h-8 rounded bg-pink-600 flex items-center justify-center text-white"><svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.072 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" /></svg></div>
+                   <div className="w-8 h-8 rounded bg-pink-600 flex items-center justify-center text-white"><svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.072 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" /></svg></div>
                    <input type="text" placeholder="URL do Instagram" value={formData.socialLinks.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} className="flex-1 px-4 py-2 bg-gray-50 border rounded-lg text-sm" />
                 </div>
                 <div className="flex items-center gap-4">
