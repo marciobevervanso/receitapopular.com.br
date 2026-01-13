@@ -2,9 +2,28 @@
 import { Recipe, Category, SiteSettings, WebStory, MealPlan, RecipeSuggestion, DietPlan } from "../types";
 import { CATEGORIES as DEFAULT_CATEGORIES } from "../constants";
 import { supabase } from "./supabaseClient";
-import { imageOptimizer } from "./imageOptimizer"; 
 
-// --- Helpers ---
+// Cache em memória para evitar hits constantes no Supabase
+let _settingsCache: SiteSettings | null = null;
+const SUPABASE_BUCKET = 'images';
+const SUPABASE_BASE_URL = 'https://awwkzlfjlpktfzmcpjiw.supabase.co/storage/v1/object/public/images/';
+
+/**
+ * Utilitário para extrair o caminho relativo exato de uma URL do Supabase
+ * Ex: de "https://.../public/images/recipes/bolo-123.webp" extrai "recipes/bolo-123.webp"
+ */
+const getRelativePath = (url: string): string | null => {
+  if (!url || !url.includes(`/${SUPABASE_BUCKET}/`)) return null;
+  try {
+    // Divide pela pasta do bucket e pega a parte final (o caminho do arquivo)
+    const parts = url.split(`/${SUPABASE_BUCKET}/`);
+    const pathPart = parts[parts.length - 1];
+    // Remove qualquer parâmetro de query (?opt=123...)
+    return pathPart.split('?')[0];
+  } catch (e) {
+    return null;
+  }
+};
 
 const uploadImageInternal = async (data: string | Blob, path: string): Promise<string> => {
   try {
@@ -21,10 +40,11 @@ const uploadImageInternal = async (data: string | Blob, path: string): Promise<s
         return "https://images.unsplash.com/photo-1495521821378-860fa0171913?q=80&w=1000&auto=format&fit=crop";
     }
 
+    // Upload manual usa timestamp para evitar conflito e cache durante o rascunho
     const fileName = `${path}-${Date.now()}.webp`; 
 
     const { error } = await supabase.storage
-      .from('images')
+      .from(SUPABASE_BUCKET)
       .upload(fileName, blobToUpload, {
         contentType: 'image/webp',
         upsert: true
@@ -33,7 +53,7 @@ const uploadImageInternal = async (data: string | Blob, path: string): Promise<s
     if (error) throw error;
 
     const { data: publicUrlData } = supabase.storage
-      .from('images')
+      .from(SUPABASE_BUCKET)
       .getPublicUrl(fileName);
 
     return publicUrlData.publicUrl;
@@ -50,32 +70,31 @@ export const storageService = {
      return uploadImageInternal(data, `${folder}/img`);
   },
 
+  /**
+   * Remove um arquivo físico do bucket do Supabase.
+   */
   async removeFile(url: string): Promise<void> {
-    if (!url || !url.includes('/storage/v1/object/public/images/')) return;
+    const path = getRelativePath(url);
+    if (!path) return;
+
     try {
-      const path = url.split('/storage/v1/object/public/images/')[1];
-      if (path) {
-        const cleanPath = path.split('?')[0]; 
-        console.log(`[Storage] Removendo arquivo antigo: ${cleanPath}`);
-        await supabase.storage.from('images').remove([cleanPath]);
-      }
-    } catch (e) {
-      console.warn("Remove file exception:", e);
+      console.log(`[Storage] Deletando arquivo físico: ${path}`);
+      const { error } = await supabase.storage.from(SUPABASE_BUCKET).remove([path]);
+      if (error) throw error;
+      console.log(`[Storage] Sucesso ao deletar: ${path}`);
+    } catch (e: any) {
+      console.warn(`[Storage] Falha na remoção do arquivo (${path}):`, e.message || e);
     }
   },
 
-  async optimizeImage(imageUrl: string, path: string): Promise<string> {
+  /**
+   * Dispara o n8n para otimização
+   */
+  async optimizeImage(imageUrl: string, path: string, slug: string): Promise<string> {
       const settings = await this.getSettings();
       const endpoint = settings.customConverterUrl || settings.n8nImageOptimizationUrl;
       
-      if (!endpoint) {
-          throw new Error("Webhook de otimização não configurado nas Integrações.");
-      }
-
-      console.log(`[Storage] Iniciando requisição para n8n: ${endpoint}`);
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); 
+      if (!endpoint) throw new Error("Webhook de otimização não configurado.");
 
       try {
           const response = await fetch(endpoint, {
@@ -84,81 +103,85 @@ export const storageService = {
               body: JSON.stringify({ 
                   imageUrl: imageUrl, 
                   path: path, 
-                  action: 'optimize' 
-              }),
-              signal: controller.signal
+                  slug: slug,
+                  action: 'optimize'
+              })
           });
 
-          if (!response.ok) {
-              const errText = await response.text();
-              console.error(`[Storage] Erro n8n: ${response.status}`, errText);
-              throw new Error(`Erro no servidor de conversão: ${response.status}`);
-          }
+          if (!response.ok) throw new Error(`Erro n8n: ${response.status}`);
 
           const rawData = await response.json();
-          console.log(`[Storage] Resposta bruta do n8n:`, rawData);
-
           let resultUrl = null;
-          
-          if (Array.isArray(rawData)) {
-             resultUrl = rawData[0]?.url || rawData[0]?.optimizedUrl || rawData[0]?.publicUrl || (rawData[0]?.json?.url);
-          } else if (typeof rawData === 'object' && rawData !== null) {
-             resultUrl = rawData.url || rawData.optimizedUrl || rawData.publicUrl || (rawData.json?.url);
-             if (!resultUrl && rawData.data && Array.isArray(rawData.data)) {
-                resultUrl = rawData.data[0]?.url;
+
+          if (typeof rawData === 'object' && rawData !== null) {
+             const possiblePath = rawData.url || rawData.publicUrl || rawData.Key || (rawData.json?.url);
+             if (possiblePath && !possiblePath.startsWith('http')) {
+                resultUrl = `${SUPABASE_BASE_URL}${possiblePath}`;
+             } else {
+                resultUrl = possiblePath;
              }
-          } else if (typeof rawData === 'string' && rawData.startsWith('http')) {
-             resultUrl = rawData;
+          } else if (typeof rawData === 'string') {
+             resultUrl = rawData.startsWith('http') ? rawData : `${SUPABASE_BASE_URL}${rawData}`;
           }
           
-          if (!resultUrl) {
-             console.error("[Storage] Formato de resposta inválido:", rawData);
-             throw new Error("O n8n não retornou o link da imagem.");
+          if (!resultUrl || !resultUrl.startsWith('http')) {
+             throw new Error("n8n não retornou um link de imagem válido.");
           }
-          
-          console.log(`[Storage] Otimização concluída com sucesso: ${resultUrl}`);
-          return `${resultUrl}${resultUrl.includes('?') ? '&' : '?'}opt=${Date.now()}`;
+
+          return resultUrl;
       } catch (err: any) {
-          console.error("[Storage] Erro fatal em optimizeImage:", err);
-          if (err.name === 'AbortError') throw new Error("Tempo limite (20s) excedido. O n8n está muito lento.");
           throw err;
-      } finally {
-          clearTimeout(timeoutId);
       }
   },
 
+  /**
+   * FLUXO DE SUBSTITUIÇÃO INTELIGENTE:
+   * 1. Gera a imagem nova com nome limpo (via n8n).
+   * 2. Atualiza a receita no banco de dados com a nova URL.
+   * 3. Deleta o arquivo antigo se os caminhos forem diferentes.
+   */
   async smartOptimize(recipe: Recipe): Promise<Recipe> {
-      console.log(`[SmartOptimize] Iniciando para: ${recipe.title}`);
-      
-      const targetPath = `recipes/${recipe.slug}`;
       const oldUrl = recipe.imageUrl;
+      // n8n vai salvar em: recipes/slug-da-receita.webp
+      const targetPath = `recipes/${recipe.slug}`;
       
       try {
-          const newUrl = await this.optimizeImage(oldUrl, targetPath);
+          // 1. Pede a otimização
+          const newUrlRaw = await this.optimizeImage(oldUrl, targetPath, recipe.slug);
+          
+          // Adicionamos um timestamp para forçar o navegador a atualizar a imagem na tela
+          const newUrl = `${newUrlRaw}${newUrlRaw.includes('?') ? '&' : '?'}v=${Date.now()}`;
 
-          if (newUrl) {
-              const oldClean = oldUrl.split('?')[0];
-              const newClean = newUrl.split('?')[0];
+          // 2. Criamos o objeto atualizado
+          const updatedRecipe = { 
+              ...recipe, 
+              imageUrl: newUrl, 
+              isOptimized: true 
+          };
 
-              if (oldClean !== newClean && oldUrl.includes('supabase.co')) {
-                  await this.removeFile(oldUrl);
-              }
+          // 3. Salvamos PRIMEIRO no banco de dados para garantir que o link não quebre
+          await this.saveRecipe(updatedRecipe);
+          console.log("[SmartOptimize] Receita atualizada no banco com novo link.");
 
-              // Marca isOptimized como true para a UI saber que o processo foi concluído
-              const updatedRecipe = { ...recipe, imageUrl: newUrl, isOptimized: true };
-              await this.saveRecipe(updatedRecipe);
-              
-              return updatedRecipe;
+          // 4. Faxina: Deleta o arquivo original (o que tinha o timestamp no nome)
+          const oldPath = getRelativePath(oldUrl);
+          const newPath = getRelativePath(newUrl);
+
+          if (oldPath && newPath && oldPath !== newPath) {
+              console.log("[SmartOptimize] Faxina iniciada. Substituindo arquivo...");
+              // Executamos em background para não travar a UI
+              this.removeFile(oldUrl).catch(err => console.error("Erro na faxina:", err));
+          } else {
+              console.log("[SmartOptimize] O nome do arquivo já era o ideal, nenhuma remoção necessária.");
           }
+
+          return updatedRecipe;
+
       } catch (err) {
-          console.error("[SmartOptimize] Erro durante o fluxo:", err);
+          console.error("[SmartOptimize] Erro no processo:", err);
           throw err;
       }
-
-      throw new Error("Falha ao gerar nova URL.");
   },
-
-  // --- RECIPES ---
 
   async getRecipesPaginated(page: number = 0, pageSize: number = 12): Promise<Recipe[]> {
     const from = page * pageSize;
@@ -218,8 +241,6 @@ export const storageService = {
     if (error) throw error;
   },
 
-  // --- CATEGORIES ---
-
   async getCategories(): Promise<Category[]> {
     const { data, error } = await supabase.from('categories').select('*');
     if (error || !data || data.length === 0) {
@@ -235,8 +256,6 @@ export const storageService = {
     if (error) throw error;
   },
 
-  // --- DIET PLANS ---
-  
   async getDietPlans(): Promise<DietPlan[]> {
     const { data, error } = await supabase.from('diet_plans').select('*').order('created_at', { ascending: false });
     if (error) return [];
@@ -251,23 +270,22 @@ export const storageService = {
     if (error) throw error;
   },
 
-  // --- SETTINGS ---
-
   async getSettings(): Promise<SiteSettings> {
+    if (_settingsCache) return _settingsCache;
     const { data, error } = await supabase.from('site_settings').select('*').eq('id', 'global').single();
     const DEFAULT_SETTINGS: SiteSettings = {
       siteName: 'Receita Popular', siteDescription: 'Gastronomia Descomplicada', heroRecipeIds: [], socialLinks: {}, banners: []
     };
     if (error || !data) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...data.data };
+    _settingsCache = { ...DEFAULT_SETTINGS, ...data.data };
+    return _settingsCache;
   },
 
   async saveSettings(settings: SiteSettings): Promise<void> {
     const { error } = await supabase.from('site_settings').upsert({ id: 'global', data: settings });
     if (error) throw error;
+    _settingsCache = settings;
   },
-
-  // --- WEB STORIES ---
 
   async getStories(): Promise<WebStory[]> {
     const { data, error } = await supabase.from('web_stories').select('*').order('created_at', { ascending: false });
@@ -280,8 +298,6 @@ export const storageService = {
     if (error) throw error;
   },
 
-  // --- MEAL PLANS ---
-  
   getMealPlan(): MealPlan {
     const saved = localStorage.getItem('mealPlan');
     if (saved) return JSON.parse(saved);
@@ -291,8 +307,6 @@ export const storageService = {
   saveMealPlan(plan: MealPlan): void {
     localStorage.setItem('mealPlan', JSON.stringify(plan));
   },
-
-  // --- SUGGESTIONS ---
 
   async submitSuggestion(suggestion: RecipeSuggestion): Promise<void> {
     await supabase.from('recipe_suggestions').insert({
@@ -312,8 +326,6 @@ export const storageService = {
     await supabase.from('recipe_suggestions').delete().eq('id', id);
   },
 
-  // --- USER ---
-  
   getUserLevel(): { title: string, level: number, xp: number } {
     const recipesCount = parseInt(localStorage.getItem('recipesCreated') || '0');
     const favoritesCount = JSON.parse(localStorage.getItem('favorites') || '[]').length;

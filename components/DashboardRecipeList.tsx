@@ -30,12 +30,12 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
     try {
         const updatedRecipe = await storageService.smartOptimize(recipe);
         console.log("⚡ [Sucesso] Receita otimizada:", updatedRecipe.title);
+        // Garante que a atualização no componente pai seja refletida
         await onUpdate(updatedRecipe);
     } catch (err: any) {
         console.error("⚡ [Erro]", err);
         alert(`Não foi possível otimizar:\n${err.message}`);
     } finally {
-        // ESSENCIAL: Garante que a bolinha pare de girar
         setOptimizingId(null);
     }
   };
@@ -57,7 +57,6 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
           </button>
         </div>
 
-        {/* Filter Toolbar */}
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
            <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-gray-400 uppercase">Filtrar:</span>
@@ -67,7 +66,6 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
            <div className="text-xs text-gray-400 font-bold">Total: {filteredRecipes.length}</div>
         </div>
 
-        {/* List */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative z-0">
            <table className="w-full text-left border-collapse">
             <thead className="bg-gray-50 border-b border-gray-100">
@@ -79,8 +77,11 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredRecipes.map(recipe => {
-                // AGORA CHECAMOS O CAMPO BOOLEANO isOptimized
-                const isProcessed = recipe.isOptimized === true;
+                // LÓGICA DE DETECÇÃO DE OTIMIZAÇÃO MELHORADA
+                // 1. Verifica se a flag isOptimized existe e é true
+                // 2. Verifica se a URL contém o parâmetro 'opt=' que injetamos após o n8n
+                const isProcessed = recipe.isOptimized === true || recipe.imageUrl.includes('opt=');
+                
                 const isPlaceholder = recipe.imageUrl.includes('placeholder') || recipe.imageUrl.includes('unsplash');
                 const isOptimizing = optimizingId === recipe.id;
                 
@@ -90,9 +91,11 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
                       <div className="flex items-center gap-3">
                          <div className="w-10 h-10 rounded bg-gray-100 overflow-hidden shrink-0 relative border border-gray-200">
                             <img src={recipe.imageUrl} className="w-full h-full object-cover" alt="" />
-                            {/* Bolinha Laranja se NÃO foi processado pelo n8n */}
                             {!isProcessed && !isPlaceholder && (
                                <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-orange-500 border-2 border-white rounded-full animate-pulse" title="Pendente de Otimização"></div>
+                            )}
+                            {isProcessed && (
+                               <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" title="Otimizada"></div>
                             )}
                          </div>
                          <div>

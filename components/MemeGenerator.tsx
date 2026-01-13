@@ -18,19 +18,15 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewCaption, setPreviewCaption] = useState('');
 
-  // Helper to retrieve key
-  const getApiKey = () => {
-    // @ts-ignore
-    return import.meta.env?.VITE_API_KEY || process.env.API_KEY || '';
-  };
-
   // 1. Generate Text Idea (Brainstorm)
   const handleMagicIdea = async () => {
     setIsDreaming(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: getApiKey() });
+      // Fix: Strictly using process.env.API_KEY for initialization
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Fix: Updated to 'gemini-3-flash-preview' for text task
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: "Gere uma única frase curta e EXTREMAMENTE engraçada/caótica para um meme de culinária. Estilo: Twitter/TikTok Brasil, linguagem coloquial, 'perrengue chique', expectativa vs realidade. Ex: 'Minha dieta durou 15 min', 'O que eu cozinhei vs o que comi'. Retorne APENAS o texto puro, sem aspas.",
         config: {
            temperature: 1.4,
@@ -53,7 +49,8 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
     setStatus('generating');
 
     try {
-      const ai = new GoogleGenAI({ apiKey: getApiKey() });
+      // Fix: Strictly using process.env.API_KEY for initialization
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
       // Parallel Generation: Image & Caption
       // Prompt ajustado para FOTOGRAFIA REALISTA
@@ -62,8 +59,9 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
         contents: { parts: [{ text: `A real life photograph, 8k resolution, Canon 5D style. A funny/chaotic kitchen scene representing: "${idea}". Real humans with realistic skin texture, real food. NOT A DRAWING, NOT 3D, NOT CARTOON. Photorealistic style.` }] },
       });
 
+      // Fix: Updated to 'gemini-3-flash-preview' for text task
       const captionPromise = ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: `Crie uma legenda de Instagram para um meme sobre: "${idea}". 
         Use humor brasileiro, irônico e engraçado. Use emojis. 
         Adicione hashtags populares de culinária e humor (#receitapopular #humor #culinaria). 
@@ -72,7 +70,7 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
 
       const [imgResponse, captionResponse] = await Promise.all([imagePromise, captionPromise]);
 
-      // Process Image: Iterate through parts to find inlineData
+      // Process Image: Iterate through parts to find inlineData as per guidelines
       let imageBase64 = null;
       const parts = imgResponse.candidates?.[0]?.content?.parts || [];
       for (const part of parts) {

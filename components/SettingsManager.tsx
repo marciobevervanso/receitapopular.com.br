@@ -13,70 +13,11 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
   const [availableRecipes, setAvailableRecipes] = useState<Recipe[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [saving, setSaving] = useState(false);
-  
-  // API Key State
-  const [manualKey, setManualKey] = useState('');
-  const [keySource, setKeySource] = useState<'none' | 'vite' | 'manual'>('none');
-  const [keyStatus, setKeyStatus] = useState<'checking' | 'ok' | 'missing'>('checking');
 
   useEffect(() => {
     storageService.getRecipes().then(setAvailableRecipes);
     storageService.getCategories().then(setCategories);
-    checkKeyStatus();
   }, []);
-
-  const checkKeyStatus = () => {
-    // 1. Check LocalStorage
-    const local = localStorage.getItem('gemini_api_key');
-    if (local && local.length > 5) {
-       setKeySource('manual');
-       setManualKey(local); // Pre-fill input
-       setKeyStatus('ok');
-       return;
-    }
-
-    // 2. Check Vite Env
-    // @ts-ignore
-    const viteKey = import.meta.env?.VITE_API_KEY;
-    if (viteKey && viteKey.length > 5) {
-       setKeySource('vite');
-       setKeyStatus('ok');
-       return;
-    }
-
-    // 3. Check Process Env (Fallback)
-    if (process.env.API_KEY && process.env.API_KEY.length > 5) {
-       setKeySource('vite'); // Treat as system env
-       setKeyStatus('ok');
-       return;
-    }
-
-    setKeyStatus('missing');
-    setKeySource('none');
-  };
-
-  const handleSaveManualKey = () => {
-    if (manualKey.trim().length < 10 && manualKey.trim().length > 0) {
-       alert("A chave parece muito curta. Verifique se copiou corretamente.");
-       return;
-    }
-    
-    if (manualKey.trim() === '') {
-       localStorage.removeItem('gemini_api_key');
-       alert("Chave manual removida. O sistema tentará usar a variável de ambiente (Global).");
-    } else {
-       localStorage.setItem('gemini_api_key', manualKey.trim());
-       alert("Chave manual salva APENAS NESTE NAVEGADOR! Use isso apenas para testes.");
-    }
-    checkKeyStatus();
-  };
-
-  const handleClearManualKey = () => {
-    localStorage.removeItem('gemini_api_key');
-    setManualKey('');
-    checkKeyStatus();
-    alert("Chave local removida. Agora usando a configuração do servidor (Global).");
-  };
 
   const handleChange = (field: keyof SiteSettings, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -118,67 +59,6 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
        <div className="mb-8">
          <h2 className="text-3xl font-extrabold text-pop-dark">Configurações do Site</h2>
          <p className="text-gray-500">Ajuste os detalhes globais da plataforma.</p>
-       </div>
-
-       {/* DIAGNOSTICS & KEY MANAGER */}
-       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-8 space-y-6">
-          <div className="flex items-center justify-between">
-             <h3 className="font-bold text-pop-dark uppercase text-sm">Conexão IA (Google Gemini)</h3>
-             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${keyStatus === 'ok' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {keyStatus === 'ok' ? 'Conectado' : 'Desconectado'}
-             </span>
-          </div>
-
-          <div className={`p-4 rounded-xl border ${keySource === 'manual' ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
-             <div className="flex items-center gap-2 mb-2">
-                <div className={`w-3 h-3 rounded-full ${keySource === 'manual' ? 'bg-yellow-500' : keySource === 'vite' ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                <span className="text-sm font-bold text-gray-700">
-                    Fonte Atual: {keySource === 'manual' ? 'Chave Local (Apenas você)' : keySource === 'vite' ? 'Ambiente Global (Todos os usuários)' : 'Nenhuma'}
-                </span>
-             </div>
-             
-             {keySource === 'manual' && (
-                <p className="text-xs text-yellow-700 font-medium mt-1">
-                   ⚠️ <strong>Atenção:</strong> Você está usando uma chave salva apenas no seu navegador. Visitantes do site não conseguirão usar a IA. Para disponibilizar para todos, adicione a chave <code>VITE_API_KEY</code> nas configurações de deploy (Netlify/Vercel) e clique em "Usar Global" abaixo.
-                </p>
-             )}
-             
-             {keyStatus === 'missing' && (
-                <p className="text-xs text-red-500 font-bold mt-2">
-                   ⚠️ Nenhuma chave encontrada. A geração de receitas não funcionará.
-                </p>
-             )}
-          </div>
-
-          <div className="border-t border-gray-100 pt-4">
-             <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Override Manual (Apenas Teste)</label>
-             <div className="flex flex-col md:flex-row gap-2">
-                <input 
-                  type="password" 
-                  value={manualKey}
-                  onChange={e => setManualKey(e.target.value)}
-                  placeholder="Cole sua chave AIza... aqui"
-                  className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl focus:border-pop-dark outline-none font-mono text-sm"
-                />
-                <button 
-                  onClick={handleSaveManualKey}
-                  className="px-6 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors whitespace-nowrap"
-                >
-                   Salvar Localmente
-                </button>
-                {keySource === 'manual' && (
-                   <button 
-                     onClick={handleClearManualKey}
-                     className="px-6 py-3 bg-red-100 text-red-600 font-bold rounded-xl hover:bg-red-200 transition-colors whitespace-nowrap border border-red-200"
-                   >
-                      Usar Global (Apagar Local)
-                   </button>
-                )}
-             </div>
-             <p className="text-[10px] text-gray-400 mt-2">
-                Use este campo apenas se a configuração automática do servidor falhar ou para testes locais.
-             </p>
-          </div>
        </div>
 
        <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-8">

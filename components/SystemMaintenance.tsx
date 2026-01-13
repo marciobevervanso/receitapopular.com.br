@@ -122,7 +122,8 @@ export const SystemMaintenance: React.FC<SystemMaintenanceProps> = ({ recipes, o
      setProcessing(true);
      try {
         const testUrl = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=200";
-        await storageService.optimizeImage(testUrl, 'test/connection-check');
+        // CORREÇÃO: Adicionado o slug como terceiro argumento
+        await storageService.optimizeImage(testUrl, 'test/connection-check', 'test-slug');
         alert(`Conexão OK!`);
      } catch (err: any) {
         console.error(err);

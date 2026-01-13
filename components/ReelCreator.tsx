@@ -31,12 +31,29 @@ export const ReelCreator: React.FC<ReelCreatorProps> = ({ recipes }) => {
 
   const handleGenerateVideo = async () => {
     if (!script) return;
+
+    // Fix: Veo video generation requires user-selected API key as per guidelines
+    // @ts-ignore
+    if (!(await window.aistudio.hasSelectedApiKey())) {
+       // @ts-ignore
+       await window.aistudio.openSelectKey();
+       // Proceeding as per guideline to mitigate race condition
+    }
+
     setLoadingVideo(true);
     try {
       const url = await generateReelVideo(script.visualPrompt);
       setVideoUrl(url);
-    } catch (e) {
-      alert("Erro ao gerar vídeo. Verifique se sua chave de API suporta o modelo Veo.");
+    } catch (e: any) {
+      console.error(e);
+      // Fix: Handle specific error message to reset key selection
+      if (e.message?.includes("Requested entity was not found.")) {
+         alert("Ocorreu um erro com a sua chave de API. Por favor, selecione-a novamente.");
+         // @ts-ignore
+         await window.aistudio.openSelectKey();
+      } else {
+         alert("Erro ao gerar vídeo. Verifique se sua chave de API suporta o modelo Veo.");
+      }
     } finally {
       setLoadingVideo(false);
     }
