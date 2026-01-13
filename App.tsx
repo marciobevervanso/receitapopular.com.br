@@ -215,13 +215,14 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateRecipe = async (updatedRecipe: Recipe) => {
-    // SILENT UPDATE: Não usamos setIsLoading(true) aqui para evitar flickering no Dashboard
+    setIsLoading(true);
     try {
       await storageService.saveRecipe(updatedRecipe);
       setRecipes(prev => prev.map(r => r.id === updatedRecipe.id ? updatedRecipe : r));
     } catch (e) {
-      console.error("Erro ao atualizar receita:", e);
       alert('Erro ao atualizar receita.');
+    } finally {
+      setIsLoading(false);
     }
   };
 

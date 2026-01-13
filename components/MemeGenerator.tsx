@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { SiteSettings } from '../types';
 import { generateMeme } from '../services/socialService';
@@ -22,10 +21,10 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
   const handleMagicIdea = async () => {
     setIsDreaming(true);
     try {
-      // Fix: Strictly using process.env.API_KEY for initialization
+      // Fix: Exclusively use process.env.API_KEY as per guidelines
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Fix: Updated to 'gemini-3-flash-preview' for text task
       const response = await ai.models.generateContent({
+        // Fix: Use recommended model for text tasks
         model: 'gemini-3-flash-preview',
         contents: "Gere uma única frase curta e EXTREMAMENTE engraçada/caótica para um meme de culinária. Estilo: Twitter/TikTok Brasil, linguagem coloquial, 'perrengue chique', expectativa vs realidade. Ex: 'Minha dieta durou 15 min', 'O que eu cozinhei vs o que comi'. Retorne APENAS o texto puro, sem aspas.",
         config: {
@@ -49,7 +48,7 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
     setStatus('generating');
 
     try {
-      // Fix: Strictly using process.env.API_KEY for initialization
+      // Fix: Exclusively use process.env.API_KEY as per guidelines
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
       // Parallel Generation: Image & Caption
@@ -59,8 +58,8 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
         contents: { parts: [{ text: `A real life photograph, 8k resolution, Canon 5D style. A funny/chaotic kitchen scene representing: "${idea}". Real humans with realistic skin texture, real food. NOT A DRAWING, NOT 3D, NOT CARTOON. Photorealistic style.` }] },
       });
 
-      // Fix: Updated to 'gemini-3-flash-preview' for text task
       const captionPromise = ai.models.generateContent({
+        // Fix: Use recommended model for text tasks
         model: 'gemini-3-flash-preview',
         contents: `Crie uma legenda de Instagram para um meme sobre: "${idea}". 
         Use humor brasileiro, irônico e engraçado. Use emojis. 
@@ -70,7 +69,7 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
 
       const [imgResponse, captionResponse] = await Promise.all([imagePromise, captionPromise]);
 
-      // Process Image: Iterate through parts to find inlineData as per guidelines
+      // Process Image: Iterate through parts to find inlineData
       let imageBase64 = null;
       const parts = imgResponse.candidates?.[0]?.content?.parts || [];
       for (const part of parts) {
@@ -125,7 +124,7 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
         console.log("Imagem enviada com sucesso:", publicUrl);
       } catch (uploadError) {
         console.error("Erro no upload:", uploadError);
-        alert("Erro ao fazer upload da imagem. Verifique se o bucket 'images' é público no Supabase.");
+        alert("Erro ao fazer upload da imagem. Verifique o bucket 'images' é público no Supabase.");
         setStatus('error');
         return;
       }

@@ -1,10 +1,10 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Recipe, WebStory, NutritionalAnalysis, ReelScript, ChatMessage, DietPlan } from "../types";
 import { storageService } from "./storageService";
 
-// Fix: Always use process.env.API_KEY directly for initialization as per guidelines
+// Prevent crash if API_KEY is missing, though API calls will fail gracefully later
 const createAI = () => {
+  // Fix: Exclusively use process.env.API_KEY as per guidelines
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
@@ -17,6 +17,7 @@ const cleanJson = (text: string | undefined): string => {
   return clean;
 };
 
+// Fix: Use simple objects for schemas as Type enum handles validation
 const recipeSchema = { type: Type.OBJECT, properties: { title: { type: Type.STRING }, slug: { type: Type.STRING }, datePublished: { type: Type.STRING }, description: { type: Type.STRING }, story: { type: Type.STRING }, prepTime: { type: Type.STRING }, cookTime: { type: Type.STRING }, servings: { type: Type.NUMBER }, ingredients: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { item: { type: Type.STRING }, amount: { type: Type.STRING }, note: { type: Type.STRING }, purchaseLink: { type: Type.STRING } }, required: ["item", "amount"] } }, steps: { type: Type.ARRAY, items: { type: Type.STRING } }, nutrition: { type: Type.OBJECT, properties: { calories: { type: Type.NUMBER }, protein: { type: Type.STRING }, carbs: { type: Type.STRING }, fat: { type: Type.STRING } }, required: ["calories", "protein", "carbs", "fat"] }, tags: { type: Type.ARRAY, items: { type: Type.STRING } }, visualDescription: { type: Type.STRING }, affiliates: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, url: { type: Type.STRING }, price: { type: Type.STRING } }, required: ["name", "url"] } }, tips: { type: Type.ARRAY, items: { type: Type.STRING } }, pairing: { type: Type.STRING }, faq: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { question: { type: Type.STRING }, answer: { type: Type.STRING } }, required: ["question", "answer"] } } }, required: ["title", "slug", "datePublished", "description", "ingredients", "steps", "nutrition", "story", "visualDescription", "tips", "pairing", "faq", "tags"] };
 const storySchema = { type: Type.OBJECT, properties: { slides: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, layout: { type: Type.STRING }, text: { type: Type.STRING }, subtext: { type: Type.STRING }, visualPrompt: { type: Type.STRING } }, required: ["type", "text", "layout", "visualPrompt"] } } } };
 const reelScriptSchema = { type: Type.OBJECT, properties: { hook: { type: Type.STRING }, body: { type: Type.STRING }, cta: { type: Type.STRING }, visualPrompt: { type: Type.STRING }, hashtags: { type: Type.STRING } }, required: ["hook", "body", "cta", "visualPrompt", "hashtags"] };
@@ -48,8 +49,8 @@ const dietPlanSchema = {
 export const generateRecipeFromScratch = async (dishName: string): Promise<Omit<Recipe, 'id' | 'imageUrl'>> => {
   const ai = createAI();
   try {
-    // Fix: Updated to 'gemini-3-flash-preview' for basic text tasks
     const structureResponse = await ai.models.generateContent({
+      // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview", 
       contents: `Você é o Editor Chefe do 'Receita Popular'. Crie uma receita completa de "${dishName}". Autêntica, com história cultural, segredos de chef. Transforme os dados em JSON. Responda ESTRITAMENTE em Português do Brasil (PT-BR). **IMPORTANTE**: No campo 'affiliates', liste 4-6 utensílios/eletros essenciais (ex: Airfryer, Batedeira, Forma) apenas com 'name' (deixe 'url' vazio).`,
       config: { responseMimeType: "application/json", responseSchema: recipeSchema }
@@ -70,8 +71,8 @@ export const generateRecipeFromIngredients = async (ingredients: string[]): Prom
     IMPORTANTE: Responda ESTRITAMENTE em Português do Brasil (PT-BR). O título, descrição, passos e ingredientes devem estar em Português.
     Responda em JSON.`;
     
-    // Fix: Updated to 'gemini-3-flash-preview'
     const response = await ai.models.generateContent({
+      // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: { responseMimeType: "application/json", responseSchema: recipeSchema }
@@ -93,8 +94,8 @@ export const generateCustomDietPlan = async (userGoal: string): Promise<DietPlan
     Responda em Português do Brasil.
     Retorne estritamente em JSON.`;
 
-    // Fix: Updated to 'gemini-3-flash-preview'
     const response = await ai.models.generateContent({
+      // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: { 
@@ -143,8 +144,8 @@ export const remixRecipe = async (originalRecipe: Recipe, modification: string):
     Receita Original: ${JSON.stringify(originalRecipe)}
     IMPORTANTE: Mantenha a imagem original (imageUrl) no JSON de retorno, a menos que a mudança seja drástica (ex: carne para vegano), se for drástica, gere uma nova descrição visual no campo visualDescription.`;
 
-    // Fix: Updated to 'gemini-3-flash-preview'
     const response = await ai.models.generateContent({
+      // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: { responseMimeType: "application/json", responseSchema: recipeSchema }
@@ -171,12 +172,12 @@ export const generateRecipeImage = async (visualDescription: string): Promise<st
   const prompt = `Food photography: ${visualDescription}. High resolution, delicious, culinary magazine style, 4k. Cinematic lighting. Realistic texture.`;
   
   try {
-    // Fix: Default image generation model is 'gemini-2.5-flash-image'
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image', 
       contents: { parts: [{ text: prompt }] },
     });
     
+    // Fix: Correct iteration through response candidates/parts to find inlineData
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         const mime = part.inlineData.mimeType || 'image/png';
@@ -198,9 +199,8 @@ export const convertWordPressToRecipe = async (htmlContent: string, title: strin
   try {
     const categoriesString = existingCategories.length > 0 ? `CATEGORIAS EXISTENTES: ${existingCategories.join(', ')}. Selecione a que melhor se adapta.` : "";
     const prompt = `ATENÇÃO: ATUE COMO ESPECIALISTA EM SEO. Converta este post antigo do WordPress ("${title}") em uma receita JSON. DIRETRIZES: Melhore o texto, adicione faq/tips, estime nutrição. **VISUAL DESCRIPTION**: Gere descrição visual EM INGLÊS. ${categoriesString}. Data: ${new Date().toISOString().split('T')[0]}. **UTENSÍLIOS (Campo affiliates)**: Liste OBRIGATORIAMENTE 4 a 6 utensílios ou eletrodomésticos necessários (ex: Panela de Pressão, Liquidificador, Espátula Silicone) preenchendo o campo 'name' (deixe 'url' vazio). CONTEÚDO BRUTO: ${htmlContent.substring(0, 50000)}`;
-    
-    // Fix: Updated to 'gemini-3-flash-preview'
     const response = await ai.models.generateContent({
+      // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: { responseMimeType: "application/json", responseSchema: recipeSchema }
@@ -216,9 +216,8 @@ export const identifyUtensils = async (recipe: Recipe): Promise<{name: string}[]
   const ai = createAI();
   try {
     const prompt = `Analise a receita "${recipe.title}". Ingredientes: ${recipe.ingredients.map(i => i.item).join(', ')}. Passos: ${recipe.steps.join(' ')}. Liste de 4 a 6 utensílios, eletrodomésticos ou acessórios de cozinha essenciais para preparar esta receita (ex: Batedeira Planetária, Airfryer, Jogo de Facas, Forma de Silicone). Retorne apenas os nomes em JSON.`;
-    
-    // Fix: Updated to 'gemini-3-flash-preview'
     const response = await ai.models.generateContent({
+      // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: { responseMimeType: "application/json", responseSchema: utensilsSchema }
@@ -235,9 +234,8 @@ export const generateWebStory = async (recipe: Recipe): Promise<Omit<WebStory, '
   const ai = createAI();
   try {
     const prompt = `Crie um Web Story com 5 slides baseado em: "${recipe.title}". Descrição: ${recipe.description}. Ingredientes: ${recipe.ingredients.map(i => i.item).join(', ')}. REQUISITOS VISUAIS: Descreva uma imagem DIFERENTE em INGLÊS para cada slide.`;
-    
-    // Fix: Updated to 'gemini-3-flash-preview'
     const response = await ai.models.generateContent({
+      // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: { responseMimeType: "application/json", responseSchema: storySchema }
@@ -265,9 +263,8 @@ export const generateWebStory = async (recipe: Recipe): Promise<Omit<WebStory, '
 export const generateReelScript = async (recipe: Recipe): Promise<ReelScript> => {
   const ai = createAI();
   const prompt = `Atue como estrategista de TikTok. Crie roteiro viral para: "${recipe.title}". VISUAL PROMPT: Descreva UMA cena impressionante (7s) em INGLÊS para Veo (slow motion, cinematic).`;
-  
-  // Fix: Updated to 'gemini-3-flash-preview'
   const response = await ai.models.generateContent({
+    // Fix: Use recommended model for text tasks
     model: "gemini-3-flash-preview",
     contents: prompt,
     config: { responseMimeType: "application/json", responseSchema: reelScriptSchema }
@@ -276,7 +273,6 @@ export const generateReelScript = async (recipe: Recipe): Promise<ReelScript> =>
 };
 
 export const generateReelVideo = async (visualPrompt: string): Promise<string | null> => {
-  // Fix: Create new instance right before API call to ensure latest key
   const ai = createAI();
   try {
     let operation = await ai.models.generateVideos({
@@ -289,7 +285,7 @@ export const generateReelVideo = async (visualPrompt: string): Promise<string | 
       operation = await ai.operations.getVideosOperation({ operation: operation });
     }
     const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
-    // Fix: Appending process.env.API_KEY to download link as per guidelines
+    // Fix: Exclusively use process.env.API_KEY as per guidelines
     return videoUri ? `${videoUri}&key=${process.env.API_KEY}` : null;
   } catch (error: any) {
     console.error("Veo Error:", error);
@@ -305,6 +301,7 @@ export const generateReelVideo = async (visualPrompt: string): Promise<string | 
                 operation = await ai.operations.getVideosOperation({ operation: operation });
              }
              const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+             // Fix: Exclusively use process.env.API_KEY as per guidelines
              if (videoUri) return `${videoUri}&key=${process.env.API_KEY}`;
         } catch(fallbackErr) { console.error(fallbackErr); }
     }
@@ -316,8 +313,8 @@ export const analyzeFoodImage = async (base64Image: string): Promise<Nutritional
   const ai = createAI();
   try {
     const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
-    // Fix: Updated to 'gemini-3-flash-preview'
     const response = await ai.models.generateContent({
+      // Fix: Use recommended model for multimodal tasks
       model: 'gemini-3-flash-preview',
       contents: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } }, { text: "Analise esta comida. JSON: foodName, calories, protein, carbs, fat, healthTip (PT-BR)." }] },
       config: { responseMimeType: "application/json", responseSchema: nutritionSchema }
@@ -334,8 +331,8 @@ export const chatWithChef = async (history: ChatMessage[], newMessage: string, r
   const recipesContext = recipes.map(r => `- ${r.title} (Slug: ${r.slug})`).join('\n');
 
   try {
-    // Fix: Updated to 'gemini-3-flash-preview'
     const response = await ai.models.generateContent({
+      // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview",
       contents: `
         Você é o 'Chef Popular', o assistente virtual amigável e especialista do site 'Receita Popular'.

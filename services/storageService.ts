@@ -3,10 +3,14 @@ import { Recipe, Category, SiteSettings, WebStory, MealPlan, RecipeSuggestion, D
 import { CATEGORIES as DEFAULT_CATEGORIES } from "../constants";
 import { supabase } from "./supabaseClient";
 
+// Cache em memória para evitar hits constantes no Supabase
 let _settingsCache: SiteSettings | null = null;
 const SUPABASE_BUCKET = 'images';
 const SUPABASE_BASE_URL = 'https://awwkzlfjlpktfzmcpjiw.supabase.co/storage/v1/object/public/images/';
 
+/**
+ * Utilitário para extrair o caminho relativo se necessário
+ */
 const getRelativePath = (url: string): string | null => {
   if (!url || !url.includes(`/${SUPABASE_BUCKET}/`)) return null;
   try {
@@ -30,7 +34,9 @@ const uploadImageInternal = async (data: string | Blob, path: string): Promise<s
         return "https://images.unsplash.com/photo-1495521821378-860fa0171913?q=80&w=1000&auto=format&fit=crop";
     }
 
+    // Nome temporário com timestamp para o Editor
     const fileName = `${path}-${Date.now()}.webp`; 
+
     const { error } = await supabase.storage
       .from(SUPABASE_BUCKET)
       .upload(fileName, blobToUpload, { contentType: 'image/webp', upsert: true });
@@ -45,6 +51,7 @@ const uploadImageInternal = async (data: string | Blob, path: string): Promise<s
 };
 
 export const storageService = {
+  
   async uploadImage(data: string | Blob, folder: string = 'misc'): Promise<string> {
      return uploadImageInternal(data, `${folder}/img`);
   },
@@ -60,19 +67,33 @@ export const storageService = {
   async optimizeImage(imageUrl: string, path: string, slug: string, action: string = 'optimize'): Promise<any> {
       const settings = await this.getSettings();
       const endpoint = settings.customConverterUrl || settings.n8nImageOptimizationUrl;
+      
       if (!endpoint) throw new Error("Webhook não configurado.");
 
       const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageUrl, path, slug, action })
+          body: JSON.stringify({ 
+              imageUrl, 
+              path, 
+              slug,
+              action
+          })
       });
 
       if (!response.ok) throw new Error(`Erro no conversor: ${response.status}`);
       return await response.json();
   },
 
+  /**
+   * FLUXO DE OTIMIZAÇÃO:
+   * 1. Site chama o n8n.
+   * 2. n8n converte, sobe a nova (slug.webp) e opcionalmente limpa o bucket.
+   * 3. Site recebe a URL, adiciona um carimbo de tempo (?opt=...) para burlar o cache e salva.
+   */
   async smartOptimize(recipe: Recipe): Promise<Recipe> {
+      console.log(`[n8n] Solicitando otimização total para: ${recipe.title}`);
+
       try {
           const rawData = await this.optimizeImage(
               recipe.imageUrl, 
@@ -82,6 +103,7 @@ export const storageService = {
           );
 
           let resultUrl = null;
+
           if (typeof rawData === 'object' && rawData !== null) {
              resultUrl = rawData.url || rawData.publicUrl || rawData.Key || rawData.json?.url;
           } else if (typeof rawData === 'string') {
@@ -92,12 +114,17 @@ export const storageService = {
              resultUrl = `${SUPABASE_BASE_URL}${resultUrl}`;
           }
           
-          if (!resultUrl) throw new Error("n8n não devolveu link válido.");
+          if (!resultUrl) throw new Error("n8n não devolveu o link da nova imagem.");
 
-          // SOLUÇÃO: Cache Buster para forçar o navegador a mostrar a nova imagem
+          // CACHE BUSTER: Adiciona ?opt=timestamp para forçar a atualização visual na tela
           const finalUrl = `${resultUrl}${resultUrl.includes('?') ? '&' : '?'}opt=${Date.now()}`;
 
-          const updatedRecipe = { ...recipe, imageUrl: finalUrl, isOptimized: true };
+          const updatedRecipe = { 
+              ...recipe, 
+              imageUrl: finalUrl, 
+              isOptimized: true 
+          };
+
           await this.saveRecipe(updatedRecipe);
           return updatedRecipe;
       } catch (err: any) {
@@ -108,32 +135,58 @@ export const storageService = {
 
   async getRecipesPaginated(page: number = 0, pageSize: number = 12): Promise<Recipe[]> {
     const from = page * pageSize;
-    const { data, error } = await supabase.from('recipes').select('*').order('created_at', { ascending: false }).range(from, from + pageSize - 1);
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('recipes')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
     if (error) return [];
     return data.map((row: any) => ({ ...row.data, id: row.id, slug: row.slug, title: row.title }));
   },
 
   async searchRecipes(query: string): Promise<Recipe[]> {
     if (!query) return [];
-    const { data, error } = await supabase.from('recipes').select('*').or(`title.ilike.%${query}%,slug.ilike.%${query}%`).limit(20);
+    const { data, error } = await supabase
+      .from('recipes')
+      .select('*')
+      .or(`title.ilike.%${query}%,slug.ilike.%${query}%`)
+      .limit(20);
+
     if (error) return [];
     return data.map((row: any) => ({ ...row.data, id: row.id, slug: row.slug, title: row.title }));
   },
 
   async getRecipes(): Promise<Recipe[]> {
-    const { data, error } = await supabase.from('recipes').select('*').order('created_at', { ascending: false }).limit(2000);
+    const { data, error } = await supabase
+      .from('recipes')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(2000);
+
     if (error) return [];
     return data.map((row: any) => ({ ...row.data, id: row.id, slug: row.slug, title: row.title }));
   },
 
   async saveRecipe(recipe: Recipe): Promise<void> {
-    const { error } = await supabase.from('recipes').upsert({ id: recipe.id, title: recipe.title, slug: recipe.slug, data: recipe });
+    const { error } = await supabase
+      .from('recipes')
+      .upsert({
+        id: recipe.id,
+        title: recipe.title,
+        slug: recipe.slug,
+        data: recipe
+      });
+
     if (error) throw error;
   },
 
   async deleteRecipe(id: string): Promise<void> {
     const { data: recipeData } = await supabase.from('recipes').select('data').eq('id', id).single();
-    if (recipeData?.data?.imageUrl) await this.removeFile(recipeData.data.imageUrl);
+    if (recipeData?.data?.imageUrl) {
+      await this.removeFile(recipeData.data.imageUrl);
+    }
     const { error } = await supabase.from('recipes').delete().eq('id', id);
     if (error) throw error;
   },
@@ -148,7 +201,8 @@ export const storageService = {
   },
 
   async saveCategories(categories: Category[]): Promise<void> {
-    const { error } = await supabase.from('categories').upsert(categories.map(cat => ({ id: cat.id, name: cat.name, img: cat.img })));
+    const rows = categories.map(cat => ({ id: cat.id, name: cat.name, img: cat.img }));
+    const { error } = await supabase.from('categories').upsert(rows);
     if (error) throw error;
   },
 
@@ -169,9 +223,12 @@ export const storageService = {
   async getSettings(): Promise<SiteSettings> {
     if (_settingsCache) return _settingsCache;
     const { data, error } = await supabase.from('site_settings').select('*').eq('id', 'global').single();
-    if (error || !data) return { siteName: 'Receita Popular', siteDescription: '', heroRecipeIds: [], socialLinks: {}, banners: [] };
-    _settingsCache = data.data;
-    return _settingsCache!;
+    const DEFAULT_SETTINGS: SiteSettings = {
+      siteName: 'Receita Popular', siteDescription: 'Gastronomia Descomplicada', heroRecipeIds: [], socialLinks: {}, banners: []
+    };
+    if (error || !data) return DEFAULT_SETTINGS;
+    _settingsCache = { ...DEFAULT_SETTINGS, ...data.data };
+    return _settingsCache;
   },
 
   async saveSettings(settings: SiteSettings): Promise<void> {
@@ -193,7 +250,8 @@ export const storageService = {
 
   getMealPlan(): MealPlan {
     const saved = localStorage.getItem('mealPlan');
-    return saved ? JSON.parse(saved) : { weekId: 'current', days: {} };
+    if (saved) return JSON.parse(saved);
+    return { weekId: 'current', days: {} };
   },
 
   saveMealPlan(plan: MealPlan): void {
@@ -201,13 +259,17 @@ export const storageService = {
   },
 
   async submitSuggestion(suggestion: RecipeSuggestion): Promise<void> {
-    await supabase.from('recipe_suggestions').insert({ dish_name: suggestion.dishName, description: suggestion.description, suggested_by: suggestion.suggestedBy, status: 'pending' });
+    await supabase.from('recipe_suggestions').insert({
+        dish_name: suggestion.dishName, description: suggestion.description, suggested_by: suggestion.suggestedBy, status: 'pending'
+    });
   },
 
   async getSuggestions(): Promise<RecipeSuggestion[]> {
     const { data, error } = await supabase.from('recipe_suggestions').select('*').order('created_at', { ascending: false });
     if (error) return [];
-    return data.map((row: any) => ({ id: row.id, dishName: row.dish_name, description: row.description, suggestedBy: row.suggested_by, date: row.created_at, status: row.status }));
+    return data.map((row: any) => ({
+      id: row.id, dishName: row.dish_name, description: row.description, suggestedBy: row.suggested_by, date: row.created_at, status: row.status
+    }));
   },
 
   async deleteSuggestion(id: string): Promise<void> {
@@ -218,11 +280,12 @@ export const storageService = {
     const recipesCount = parseInt(localStorage.getItem('recipesCreated') || '0');
     const favoritesCount = JSON.parse(localStorage.getItem('favorites') || '[]').length;
     const xp = (recipesCount * 100) + (favoritesCount * 10);
-    if (xp > 1000) return { title: "Master Chef", level: 5, xp };
-    if (xp > 500) return { title: "Chef Executivo", level: 4, xp };
-    if (xp > 200) return { title: "Sous Chef", level: 3, xp };
-    if (xp > 50) return { title: "Cozinheiro", level: 2, xp };
-    return { title: "Aprendiz", level: 1, xp };
+    let title = "Aprendiz"; let level = 1;
+    if (xp > 1000) { title = "Master Chef"; level = 5; }
+    else if (xp > 500) { title = "Chef Executivo"; level = 4; }
+    else if (xp > 200) { title = "Sous Chef"; level = 3; }
+    else if (xp > 50) { title = "Cozinheiro"; level = 2; }
+    return { title, level, xp };
   },
 
   async subscribeNewsletter(email: string): Promise<void> {
@@ -243,8 +306,14 @@ export const storageService = {
 
   toggleFavorite(recipeId: string): boolean {
     const favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-    const isAdded = !favorites.includes(recipeId);
-    const newFavorites = isAdded ? [...favorites, recipeId] : favorites.filter((id: string) => id !== recipeId);
+    let newFavorites;
+    let isAdded = false;
+    if (favorites.includes(recipeId)) {
+      newFavorites = favorites.filter((id: string) => id !== recipeId);
+    } else {
+      newFavorites = [...favorites, recipeId];
+      isAdded = true;
+    }
     localStorage.setItem('favorites', JSON.stringify(newFavorites));
     return isAdded;
   },

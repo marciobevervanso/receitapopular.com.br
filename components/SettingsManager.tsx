@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { SiteSettings, Recipe, Category } from '../types';
 import { storageService } from '../services/storageService';

@@ -18,23 +18,32 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
 }) => {
   const [optimizingId, setOptimizingId] = useState<string | null>(null);
 
+  // LOGICA DO BOTÃO RAIO (SIMPLIFICADA - DISPARO DIRETO)
   const handleOptimize = async (e: React.MouseEvent, recipe: Recipe) => {
     e.preventDefault();
     e.stopPropagation();
     
+    // Evita duplo clique
     if (optimizingId) return;
 
+    // 1. Feedback Visual Imediato
     setOptimizingId(recipe.id);
-    console.log("⚡ [UI] Iniciando otimização para:", recipe.title);
+    console.log("⚡ [UI] Botão clicado. Iniciando envio para:", recipe.title);
 
     try {
+        // 2. Chamada Direta ao Serviço (Sem checks de tamanho, sem HEAD request, sem confirmação)
+        // Isso garante que o webhook seja chamado se estiver configurado.
         const updatedRecipe = await storageService.smartOptimize(recipe);
-        console.log("⚡ [Sucesso] Receita otimizada:", updatedRecipe.title);
-        // Garante que a atualização no componente pai seja refletida
+        
+        console.log("⚡ [Sucesso] Receita atualizada:", updatedRecipe);
+        
+        // 3. Atualiza a lista na tela
         await onUpdate(updatedRecipe);
+
     } catch (err: any) {
-        console.error("⚡ [Erro]", err);
-        alert(`Não foi possível otimizar:\n${err.message}`);
+        console.error("⚡ [Erro Critical]", err);
+        // Mostra o erro exato para saber o que aconteceu (ex: URL faltando, Erro 500 do N8N, etc)
+        alert(`FALHA AO DISPARAR WEBHOOK:\n${err.message}\n\nVerifique:\n1. Se a URL está correta em Configurações > Integrações.\n2. Se o workflow do n8n está ativo.`);
     } finally {
         setOptimizingId(null);
     }
@@ -57,6 +66,7 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
           </button>
         </div>
 
+        {/* Filter Toolbar */}
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
            <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-gray-400 uppercase">Filtrar:</span>
@@ -66,6 +76,7 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
            <div className="text-xs text-gray-400 font-bold">Total: {filteredRecipes.length}</div>
         </div>
 
+        {/* List */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative z-0">
            <table className="w-full text-left border-collapse">
             <thead className="bg-gray-50 border-b border-gray-100">
@@ -77,11 +88,7 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredRecipes.map(recipe => {
-                // LÓGICA DE DETECÇÃO DE OTIMIZAÇÃO MELHORADA
-                // 1. Verifica se a flag isOptimized existe e é true
-                // 2. Verifica se a URL contém o parâmetro 'opt=' que injetamos após o n8n
-                const isProcessed = recipe.isOptimized === true || recipe.imageUrl.includes('opt=');
-                
+                const isWebP = recipe.imageUrl.toLowerCase().includes('.webp');
                 const isPlaceholder = recipe.imageUrl.includes('placeholder') || recipe.imageUrl.includes('unsplash');
                 const isOptimizing = optimizingId === recipe.id;
                 
@@ -91,11 +98,9 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
                       <div className="flex items-center gap-3">
                          <div className="w-10 h-10 rounded bg-gray-100 overflow-hidden shrink-0 relative border border-gray-200">
                             <img src={recipe.imageUrl} className="w-full h-full object-cover" alt="" />
-                            {!isProcessed && !isPlaceholder && (
-                               <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-orange-500 border-2 border-white rounded-full animate-pulse" title="Pendente de Otimização"></div>
-                            )}
-                            {isProcessed && (
-                               <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" title="Otimizada"></div>
+                            {/* Bolinha Laranja se NÃO for WebP ainda */}
+                            {!isWebP && !isPlaceholder && (
+                               <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-orange-500 border-2 border-white rounded-full animate-pulse" title="Precisa Otimizar"></div>
                             )}
                          </div>
                          <div>
@@ -112,25 +117,26 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
                     <td className="p-4 text-right relative z-10">
                       <div className="flex justify-end items-center gap-2 relative z-20">
                          
+                         {/* BOTÃO DE OTIMIZAR INTELIGENTE (Raio) */}
                          {!isPlaceholder && (
                             <button
                               type="button"
                               onClick={(e) => handleOptimize(e, recipe)}
                               disabled={isOptimizing}
                               className={`w-9 h-9 flex items-center justify-center rounded-lg border transition-all cursor-pointer relative z-30 shadow-sm
-                                ${isProcessed 
-                                    ? 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100 hover:border-green-300' 
-                                    : 'bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300'
+                                ${isWebP 
+                                    ? 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100 hover:border-green-300' // Estilo Verde (Já Otimizado/WebP)
+                                    : 'bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100 hover:border-orange-300' // Estilo Laranja (Falta Otimizar)
                                 }
-                                ${isOptimizing ? 'opacity-100 bg-gray-100 ring-2 ring-pop-yellow' : ''}
+                                ${isOptimizing ? 'opacity-100 bg-gray-100' : ''}
                               `}
-                              title={isProcessed ? "Otimizada. Clique para reenviar." : "Otimizar via N8N"}
+                              title={isWebP ? "Já é WebP. Clique para re-processar no N8N." : "Enviar para N8N (Converter)"}
                             >
                                {isOptimizing ? (
-                                  <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isProcessed ? 'border-green-600' : 'border-orange-600'}`}></div>
+                                  <div className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${isWebP ? 'border-green-600' : 'border-orange-600'}`}></div>
                                ) : (
                                   <span className="font-bold text-lg leading-none">⚡</span>
-                                )}
+                               )}
                             </button>
                          )}
                          
