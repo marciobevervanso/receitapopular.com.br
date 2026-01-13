@@ -9,17 +9,20 @@ const SUPABASE_BUCKET = 'images';
 const SUPABASE_BASE_URL = 'https://awwkzlfjlpktfzmcpjiw.supabase.co/storage/v1/object/public/images/';
 
 /**
- * Utilitário para extrair o caminho relativo exato de uma URL do Supabase
- * Ex: de "https://.../public/images/recipes/bolo-123.webp" extrai "recipes/bolo-123.webp"
+ * Utilitário extra-robusto para extrair o caminho relativo do Supabase.
+ * Lida com URLs que contenham /public/, /authenticated/ ou parâmetros de query.
  */
 const getRelativePath = (url: string): string | null => {
   if (!url || !url.includes(`/${SUPABASE_BUCKET}/`)) return null;
   try {
-    // Divide pela pasta do bucket e pega a parte final (o caminho do arquivo)
-    const parts = url.split(`/${SUPABASE_BUCKET}/`);
-    const pathPart = parts[parts.length - 1];
-    // Remove qualquer parâmetro de query (?opt=123...)
-    return pathPart.split('?')[0];
+    // Busca o que vem depois do nome do bucket
+    const regex = new RegExp(`\/${SUPABASE_BUCKET}\/(.+)`);
+    const match = url.match(regex);
+    if (match && match[1]) {
+      // Remove parâmetros de busca como ?opt=123 ou ?t=456
+      return match[1].split('?')[0];
+    }
+    return null;
   } catch (e) {
     return null;
   }
@@ -40,8 +43,10 @@ const uploadImageInternal = async (data: string | Blob, path: string): Promise<s
         return "https://images.unsplash.com/photo-1495521821378-860fa0171913?q=80&w=1000&auto=format&fit=crop";
     }
 
-    // Upload manual usa timestamp para evitar conflito e cache durante o rascunho
+    // Upload manual (Editor) sempre leva timestamp para evitar cache do navegador durante o rascunho
     const fileName = `${path}-${Date.now()}.webp`; 
+
+    console.log(`[Storage] Fazendo upload manual: ${fileName}`);
 
     const { error } = await supabase.storage
       .from(SUPABASE_BUCKET)
@@ -71,24 +76,31 @@ export const storageService = {
   },
 
   /**
-   * Remove um arquivo físico do bucket do Supabase.
+   * Remove fisicamente um arquivo do Supabase Storage.
    */
   async removeFile(url: string): Promise<void> {
     const path = getRelativePath(url);
-    if (!path) return;
+    if (!path) {
+      console.log("[Storage] URL não pertence ao nosso bucket ou é inválida para remoção:", url);
+      return;
+    }
 
     try {
-      console.log(`[Storage] Deletando arquivo físico: ${path}`);
-      const { error } = await supabase.storage.from(SUPABASE_BUCKET).remove([path]);
-      if (error) throw error;
-      console.log(`[Storage] Sucesso ao deletar: ${path}`);
+      console.log(`[Storage] Faxina: Tentando deletar arquivo antigo -> ${path}`);
+      const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).remove([path]);
+      
+      if (error) {
+        console.warn(`[Storage] Não foi possível deletar o arquivo (${path}). Verifique as políticas de RLS no Supabase.`, error.message);
+      } else {
+        console.log(`[Storage] Arquivo removido com sucesso:`, data);
+      }
     } catch (e: any) {
-      console.warn(`[Storage] Falha na remoção do arquivo (${path}):`, e.message || e);
+      console.error(`[Storage] Erro crítico na remoção:`, e);
     }
   },
 
   /**
-   * Dispara o n8n para otimização
+   * Dispara o n8n para otimização (WebP + Nome Limpo)
    */
   async optimizeImage(imageUrl: string, path: string, slug: string): Promise<string> {
       const settings = await this.getSettings();
@@ -113,6 +125,7 @@ export const storageService = {
           const rawData = await response.json();
           let resultUrl = null;
 
+          // Extração da resposta do n8n (Lida com URL completa ou apenas a Key)
           if (typeof rawData === 'object' && rawData !== null) {
              const possiblePath = rawData.url || rawData.publicUrl || rawData.Key || (rawData.json?.url);
              if (possiblePath && !possiblePath.startsWith('http')) {
@@ -125,7 +138,7 @@ export const storageService = {
           }
           
           if (!resultUrl || !resultUrl.startsWith('http')) {
-             throw new Error("n8n não retornou um link de imagem válido.");
+             throw new Error("O n8n não devolveu uma URL de imagem válida.");
           }
 
           return resultUrl;
@@ -135,50 +148,51 @@ export const storageService = {
   },
 
   /**
-   * FLUXO DE SUBSTITUIÇÃO INTELIGENTE:
-   * 1. Gera a imagem nova com nome limpo (via n8n).
-   * 2. Atualiza a receita no banco de dados com a nova URL.
-   * 3. Deleta o arquivo antigo se os caminhos forem diferentes.
+   * FLUXO DE SUBSTITUIÇÃO GARANTIDO:
+   * 1. n8n cria a imagem nova com nome limpo (slug.webp).
+   * 2. O site atualiza o banco de dados com a nova URL.
+   * 3. Somente após o sucesso, o site deleta a imagem antiga (aquela que tinha o timestamp no nome).
    */
   async smartOptimize(recipe: Recipe): Promise<Recipe> {
       const oldUrl = recipe.imageUrl;
-      // n8n vai salvar em: recipes/slug-da-receita.webp
-      const targetPath = `recipes/${recipe.slug}`;
+      const targetPath = `recipes/${recipe.slug}`; // O n8n deve salvar exatamente aqui
       
+      console.log(`[SmartOptimize] Iniciando processo para: ${recipe.title}`);
+
       try {
-          // 1. Pede a otimização
+          // 1. Gera e sobe a nova via n8n
           const newUrlRaw = await this.optimizeImage(oldUrl, targetPath, recipe.slug);
           
-          // Adicionamos um timestamp para forçar o navegador a atualizar a imagem na tela
-          const newUrl = `${newUrlRaw}${newUrlRaw.includes('?') ? '&' : '?'}v=${Date.now()}`;
+          // Adicionamos ?opt=TIMESTAMP para que o seu navegador não mostre a foto antiga por causa do cache
+          const newUrl = `${newUrlRaw}${newUrlRaw.includes('?') ? '&' : '?'}opt=${Date.now()}`;
 
-          // 2. Criamos o objeto atualizado
+          // 2. Cria objeto atualizado
           const updatedRecipe = { 
               ...recipe, 
               imageUrl: newUrl, 
               isOptimized: true 
           };
 
-          // 3. Salvamos PRIMEIRO no banco de dados para garantir que o link não quebre
+          // 3. Salva no banco de dados PRIMEIRO (Segurança contra links quebrados)
           await this.saveRecipe(updatedRecipe);
-          console.log("[SmartOptimize] Receita atualizada no banco com novo link.");
+          console.log("[SmartOptimize] Banco de dados atualizado com o novo link.");
 
-          // 4. Faxina: Deleta o arquivo original (o que tinha o timestamp no nome)
+          // 4. Limpeza: Só deletamos a antiga se ela era do nosso Supabase e se o nome mudou
           const oldPath = getRelativePath(oldUrl);
           const newPath = getRelativePath(newUrl);
 
           if (oldPath && newPath && oldPath !== newPath) {
-              console.log("[SmartOptimize] Faxina iniciada. Substituindo arquivo...");
-              // Executamos em background para não travar a UI
-              this.removeFile(oldUrl).catch(err => console.error("Erro na faxina:", err));
+              console.log(`[SmartOptimize] Faxina: Deletando arquivo original redundante (${oldPath})...`);
+              // Deletamos em "background" (sem await) para não atrasar a resposta da UI
+              this.removeFile(oldUrl).catch(e => console.error("Erro na limpeza de arquivo:", e));
           } else {
-              console.log("[SmartOptimize] O nome do arquivo já era o ideal, nenhuma remoção necessária.");
+              console.log("[SmartOptimize] Os nomes de arquivo são iguais ou a imagem original é externa. Nenhuma remoção necessária.");
           }
 
           return updatedRecipe;
 
       } catch (err) {
-          console.error("[SmartOptimize] Erro no processo:", err);
+          console.error("[SmartOptimize] Falha no processo de otimização:", err);
           throw err;
       }
   },
