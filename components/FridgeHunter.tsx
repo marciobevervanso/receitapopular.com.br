@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { generateRecipeFromIngredients, generateRecipeImage } from '../services/geminiService';
+import { storageService } from '../services/storageService';
 import { Recipe } from '../types';
 
 interface FridgeHunterProps {
@@ -11,30 +12,50 @@ interface FridgeHunterProps {
 export const FridgeHunter: React.FC<FridgeHunterProps> = ({ onRecipeGenerated, onClose }) => {
   const [ingredients, setIngredients] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [statusText, setStatusText] = useState('');
 
   const handleGenerate = async () => {
     if (!ingredients.trim()) return;
     setIsGenerating(true);
+    setStatusText('Chef pensando na receita...');
 
     try {
       const items = ingredients.split(',').map(i => i.trim()).filter(i => i);
+      
+      // 1. Generate Recipe Text
       const partialRecipe = await generateRecipeFromIngredients(items);
       
-      const imageUrl = await generateRecipeImage(partialRecipe.visualDescription || `Dish with ${items.join(', ')}`);
+      // 2. Generate Image
+      setStatusText('Preparando a foto do prato...');
+      const visualDesc = partialRecipe.visualDescription || `Prato delicioso feito com ${items.join(', ')}`;
+      const imageBase64 = await generateRecipeImage(visualDesc);
+      
+      // 3. Upload & Optimize Image
+      setStatusText('Salvando receita...');
+      let publicUrl = imageBase64;
+      if (imageBase64.startsWith('data:')) {
+         // This triggers resizing and optimization in storageService
+         publicUrl = await storageService.uploadImage(imageBase64, 'recipes/fridge');
+      }
       
       const fullRecipe: Recipe = {
         ...partialRecipe as any,
         id: `fridge-${Date.now()}`,
-        imageUrl: imageUrl,
+        imageUrl: publicUrl,
         slug: `fridge-${Date.now()}`,
         tags: ['Geladeira', 'Criação Mágica', ...items.slice(0, 3)]
       };
 
+      // 4. Save to DB immediately so it's persistent
+      await storageService.saveRecipe(fullRecipe);
+
       onRecipeGenerated(fullRecipe);
     } catch (e) {
-      alert("A IA não conseguiu criar uma receita com esses ingredientes. Tente ser mais específico.");
+      console.error(e);
+      alert("A IA não conseguiu criar uma receita com esses ingredientes. Tente novamente.");
     } finally {
       setIsGenerating(false);
+      setStatusText('');
     }
   };
 
@@ -75,7 +96,7 @@ export const FridgeHunter: React.FC<FridgeHunterProps> = ({ onRecipeGenerated, o
                 {isGenerating ? (
                    <>
                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                     <span>Criando Mágica...</span>
+                     <span className="animate-pulse">{statusText || 'Criando Mágica...'}</span>
                    </>
                 ) : (
                    <>

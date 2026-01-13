@@ -12,6 +12,7 @@ import { storageService } from '../services/storageService';
 import { AdUnit } from './AdUnit';
 import { PdfPreviewModal } from './PdfPreviewModal';
 import { remixRecipe } from '../services/geminiService';
+import { FoodSnapPromo } from './FoodSnapPromo'; // NEW IMPORT
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -398,6 +399,10 @@ export const RecipeDetail: React.FC<RecipeDetailProps> = ({
 
            {/* Right Sticky Sidebar */}
            <div className="md:col-span-4 space-y-8 md:sticky md:top-24 h-fit">
+              
+              {/* FOODSNAP PROMO - VERTICAL */}
+              <FoodSnapPromo variant="sidebar" />
+
               <div className="bg-pop-dark text-white p-8 rounded-3xl relative overflow-hidden shadow-xl">
                  <div className="relative z-10">
                     <h4 className="font-black uppercase tracking-widest text-sm text-pop-yellow mb-6">Nutrição (por porção)</h4>

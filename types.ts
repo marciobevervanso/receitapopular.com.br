@@ -43,7 +43,7 @@ export interface Recipe {
   originalLink?: string;
   description: string;
   story: string;
-  visualDescription?: string; // Prompt visual para IA
+  visualDescription?: string; 
   prepTime: string;
   cookTime: string;
   totalTime?: string;
@@ -60,6 +60,7 @@ export interface Recipe {
   tips?: string[];
   pairing?: string;
   faq?: FAQItem[];
+  isOptimized?: boolean; // NEW: Flag para saber se passou pelo n8n
 }
 
 export interface StorySlide {
@@ -108,7 +109,6 @@ export interface AdSettings {
   };
 }
 
-// Banner de Afiliado (ActionPay/Genérico)
 export interface AffiliateBanner {
   id: string;
   name: string;
@@ -138,10 +138,12 @@ export interface SiteSettings {
   siteName: string;
   siteDescription: string;
   heroRecipeIds: string[];
-  specialCollectionCategoryId?: string; // ID da categoria para a coleção especial
+  specialCollectionCategoryId?: string;
   n8nWebhookUrl?: string;
   n8nSocialWebhookUrl?: string;
-  n8nMemeWebhookUrl?: string; // Webhook para gerador de memes
+  n8nMemeWebhookUrl?: string;
+  n8nImageOptimizationUrl?: string;
+  customConverterUrl?: string;
   banners?: AffiliateBanner[]; 
   socialLinks: {
     facebook?: string;
@@ -159,7 +161,6 @@ export interface ChatMessage {
   showLeadGen?: boolean;
 }
 
-// MEAL PLANNER
 export interface MealSlot {
   recipeId: string;
   recipeTitle: string;
@@ -167,31 +168,27 @@ export interface MealSlot {
 }
 
 export interface DayPlan {
-  day: string; // 'mon', 'tue', etc.
+  day: string;
   lunch?: MealSlot;
   dinner?: MealSlot;
 }
 
 export interface MealPlan {
-  weekId: string; // usually current week number or date
-  days: Record<string, DayPlan>; // keys: mon, tue, wed...
+  weekId: string;
+  days: Record<string, DayPlan>;
 }
 
-// DIET PLANS (CURATED)
 export interface DietPlan {
   id: string;
   title: string;
   description: string;
-  duration: string; // "7 dias", "3 dias"
+  duration: string;
   level: 'Fácil' | 'Médio' | 'Difícil' | 'Personalizado';
   goal: 'Emagrecimento' | 'Ganho de Massa' | 'Economia' | 'Saúde' | 'Praticidade';
   imageUrl: string;
-  // A simple map of Day ID (mon, tue) to search terms or tags to find recipes
-  // In a real app, this would map to specific Recipe IDs
   structure: Record<string, { lunchQuery: string, dinnerQuery: string }>;
 }
 
-// RECIPE SUGGESTIONS
 export interface RecipeSuggestion {
   id: string;
   dishName: string;

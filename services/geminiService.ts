@@ -15,7 +15,7 @@ const getApiKey = (): string => {
 
   // 2. Vite Environment Variable (Standard for Vite apps)
   // @ts-ignore
-  if (import.meta.env && import.meta.env.VITE_API_KEY) {
+  if (import.meta.env?.VITE_API_KEY) {
     // @ts-ignore
     return import.meta.env.VITE_API_KEY;
   }
@@ -75,7 +75,7 @@ export const generateRecipeFromScratch = async (dishName: string): Promise<Omit<
   try {
     const structureResponse = await ai.models.generateContent({
       model: "gemini-2.5-flash", 
-      contents: `Você é o Editor Chefe do 'Receita Popular'. Crie uma receita completa de "${dishName}". Autêntica, com história cultural, segredos de chef. Transforme os dados em JSON. Responda estritamente em Português do Brasil. **IMPORTANTE**: No campo 'affiliates', liste 4-6 utensílios/eletros essenciais (ex: Airfryer, Batedeira, Forma) apenas com 'name' (deixe 'url' vazio).`,
+      contents: `Você é o Editor Chefe do 'Receita Popular'. Crie uma receita completa de "${dishName}". Autêntica, com história cultural, segredos de chef. Transforme os dados em JSON. Responda ESTRITAMENTE em Português do Brasil (PT-BR). **IMPORTANTE**: No campo 'affiliates', liste 4-6 utensílios/eletros essenciais (ex: Airfryer, Batedeira, Forma) apenas com 'name' (deixe 'url' vazio).`,
       config: { responseMimeType: "application/json", responseSchema: recipeSchema }
     });
     return JSON.parse(cleanJson(structureResponse.text));
@@ -88,7 +88,11 @@ export const generateRecipeFromScratch = async (dishName: string): Promise<Omit<
 export const generateRecipeFromIngredients = async (ingredients: string[]): Promise<Omit<Recipe, 'id' | 'imageUrl'>> => {
   const ai = createAI();
   try {
-    const prompt = `Atue como um Chef de Cozinha Criativo. Tenho os seguintes ingredientes na geladeira: ${ingredients.join(', ')}. Crie uma receita DELICIOSA usando PRINCIPALMENTE esses ingredientes (você pode adicionar itens básicos de despensa como azeite, sal, temperos, ovos, farinha). A receita deve ser criativa e surpreendente. Responda em JSON.`;
+    const prompt = `Atue como um Chef de Cozinha Criativo Brasileiro. Tenho os seguintes ingredientes na geladeira: ${ingredients.join(', ')}. 
+    Crie uma receita DELICIOSA usando PRINCIPALMENTE esses ingredientes (você pode adicionar itens básicos de despensa como azeite, sal, temperos, ovos, farinha).
+    A receita deve ser criativa e surpreendente.
+    IMPORTANTE: Responda ESTRITAMENTE em Português do Brasil (PT-BR). O título, descrição, passos e ingredientes devem estar em Português.
+    Responda em JSON.`;
     
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -106,9 +110,10 @@ export const generateRecipeFromIngredients = async (ingredients: string[]): Prom
 export const generateCustomDietPlan = async (userGoal: string): Promise<DietPlan> => {
   const ai = createAI();
   try {
-    const prompt = `Atue como um Nutricionista e Chef Personalizado. 
+    const prompt = `Atue como um Nutricionista e Chef Personalizado Brasileiro. 
     Crie um plano alimentar semanal (seg-dom, almoço e jantar) que atenda ao objetivo: "${userGoal}".
     O plano deve ser prático e usar termos de busca de receitas reais (ex: "Frango Grelhado", "Salada Caesar").
+    Responda em Português do Brasil.
     Retorne estritamente em JSON.`;
 
     const response = await ai.models.generateContent({
@@ -155,8 +160,9 @@ export const generateCustomDietPlan = async (userGoal: string): Promise<DietPlan
 export const remixRecipe = async (originalRecipe: Recipe, modification: string): Promise<Recipe> => {
   const ai = createAI();
   try {
-    const prompt = `Atue como um Chef Molecular e Nutricionista. Adapte a receita abaixo para ser: "${modification}".
+    const prompt = `Atue como um Chef Molecular e Nutricionista Brasileiro. Adapte a receita abaixo para ser: "${modification}".
     Mantenha o formato JSON. Ajuste ingredientes, passos e título (ex: "Bolo de Cenoura" -> "Bolo de Cenoura Vegano").
+    Responda em Português do Brasil (PT-BR).
     Receita Original: ${JSON.stringify(originalRecipe)}
     IMPORTANTE: Mantenha a imagem original (imageUrl) no JSON de retorno, a menos que a mudança seja drástica (ex: carne para vegano), se for drástica, gere uma nova descrição visual no campo visualDescription.`;
 
@@ -187,7 +193,6 @@ export const generateRecipeImage = async (visualDescription: string): Promise<st
   const prompt = `Food photography: ${visualDescription}. High resolution, delicious, culinary magazine style, 4k. Cinematic lighting. Realistic texture.`;
   
   // NOTE: Changed default to 'gemini-2.5-flash-image' for better stability with standard keys.
-  // 'gemini-3-pro-image-preview' is great but can cause 403/500 errors on some accounts.
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image', 
@@ -344,6 +349,7 @@ export const chatWithChef = async (history: ChatMessage[], newMessage: string, r
       model: "gemini-2.5-flash",
       contents: `
         Você é o 'Chef Popular', o assistente virtual amigável e especialista do site 'Receita Popular'.
+        Responda em Português do Brasil.
         RECEITAS DISPONÍVEIS: ${recipesContext}
         HISTÓRICO: ${history.map(m => `${m.role}: ${m.text}`).join('\n')}
         user: ${newMessage}

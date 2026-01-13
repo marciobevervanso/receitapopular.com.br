@@ -21,7 +21,7 @@ export const MemeGenerator: React.FC<MemeGeneratorProps> = ({ settings }) => {
   // Helper to retrieve key
   const getApiKey = () => {
     // @ts-ignore
-    return import.meta.env.VITE_API_KEY || process.env.API_KEY || '';
+    return import.meta.env?.VITE_API_KEY || process.env.API_KEY || '';
   };
 
   // 1. Generate Text Idea (Brainstorm)

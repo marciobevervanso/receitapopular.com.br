@@ -29,6 +29,7 @@ import { RecipeSuggestionModal } from './components/RecipeSuggestionModal';
 import { Recipe, AdSettings, WebStory, Language, Category, SiteSettings } from './types';
 import { t } from './utils/i18n';
 import { storageService } from './services/storageService';
+import { FoodSnapPromo } from './components/FoodSnapPromo'; // NEW IMPORT
 
 const StoriesBar: React.FC<{ stories: WebStory[]; onOpenStory: (s: WebStory) => void }> = ({ stories, onOpenStory }) => {
   return (
@@ -214,14 +215,13 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateRecipe = async (updatedRecipe: Recipe) => {
-    setIsLoading(true);
+    // SILENT UPDATE: Não usamos setIsLoading(true) aqui para evitar flickering no Dashboard
     try {
       await storageService.saveRecipe(updatedRecipe);
       setRecipes(prev => prev.map(r => r.id === updatedRecipe.id ? updatedRecipe : r));
     } catch (e) {
+      console.error("Erro ao atualizar receita:", e);
       alert('Erro ao atualizar receita.');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -540,6 +540,11 @@ export const App: React.FC = () => {
                  />
                </LazySection>
             )}
+
+            {/* FOODSNAP BANNER (HORIZONTAL) */}
+            <div className="max-w-7xl mx-auto px-4 my-12">
+               <FoodSnapPromo variant="banner" />
+            </div>
 
             <LazySection minHeight="600px">
               <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-20">
