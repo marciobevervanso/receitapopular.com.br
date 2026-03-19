@@ -233,7 +233,7 @@ export const identifyUtensils = async (recipe: Recipe): Promise<{name: string}[]
 export const generateWebStory = async (recipe: Recipe): Promise<Omit<WebStory, 'id'>> => {
   const ai = createAI();
   try {
-    const prompt = `Crie um Web Story com 5 slides baseado em: "${recipe.title}". Descrição: ${recipe.description}. Ingredientes: ${recipe.ingredients.map(i => i.item).join(', ')}. REQUISITOS VISUAIS: Descreva uma imagem DIFERENTE em INGLÊS para cada slide.`;
+    const prompt = `Crie um Web Story com 8 a 15 slides dependendo do nível de detalhes da receita. Baseado em: "${recipe.title}". Descrição: ${recipe.description}. Ingredientes: ${recipe.ingredients.map(i => i.item).join(', ')}. REQUISITOS VISUAIS: Descreva uma imagem DIFERENTE em INGLÊS para cada slide.`;
     const response = await ai.models.generateContent({
       // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview",
@@ -241,7 +241,10 @@ export const generateWebStory = async (recipe: Recipe): Promise<Omit<WebStory, '
       config: { responseMimeType: "application/json", responseSchema: storySchema }
     });
     const data = JSON.parse(cleanJson(response.text));
-    const slidesWithImages = await Promise.all(data.slides.map(async (slide: any) => {
+    
+    // Gerar imagens em sequência (for...of) para não estourar o limite de conexões (Rate Limit - Error 429) do Google AI.
+    const slidesWithImages = [];
+    for (const slide of data.slides) {
       let imageUrl = recipe.imageUrl;
       if (slide.visualPrompt) {
         try {
@@ -249,10 +252,11 @@ export const generateWebStory = async (recipe: Recipe): Promise<Omit<WebStory, '
            if(imgBase64.startsWith('data:')) {
               imageUrl = imgBase64;
            }
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Falha ao gerar slide de story:", e); }
       }
-      return { ...slide, imageUrl };
-    }));
+      slidesWithImages.push({ ...slide, imageUrl });
+    }
+    
     return { recipeId: recipe.id, title: recipe.title, slides: slidesWithImages };
   } catch (error) {
     console.error("Error generating story:", error);

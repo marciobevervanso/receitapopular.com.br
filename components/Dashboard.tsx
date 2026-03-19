@@ -6,6 +6,7 @@ import { storageService } from '../services/storageService';
 
 // Sub Components
 import { DashboardSidebar } from './DashboardSidebar';
+import { DashboardOverview } from './DashboardOverview'; // NEW
 import { DashboardRecipeList } from './DashboardRecipeList';
 import { WebStoryViewer } from './WebStoryViewer';
 import { RecipeForm } from './RecipeForm';
@@ -79,6 +80,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <div className="flex-1 md:ml-64 p-4 md:p-8">
         
         {activeTab === 'overview' && (
+           <DashboardOverview 
+             recipes={currentRecipes}
+             categories={categories}
+             onNavigate={setActiveTab}
+           />
+        )}
+
+        {activeTab === 'recipes' && (
            <DashboardRecipeList 
              recipes={currentRecipes}
              onEdit={handleEditRecipe}
