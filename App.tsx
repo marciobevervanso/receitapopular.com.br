@@ -136,7 +136,7 @@ export const App: React.FC = () => {
     trackPageView(location.pathname);
   }, [location.pathname]);
 
-  // Handle Load More Logic (Infinite Scroll Simulation)
+  // Handle Load More Logic (Manual)
   const handleLoadMore = async () => {
     if (isLoadingMore) return;
     setIsLoadingMore(true);
@@ -151,23 +151,9 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     } finally {
-      setIsLoadingMore(false);
+       setIsLoadingMore(false);
     }
   };
-
-  const observerRef = React.useRef<IntersectionObserver>();
-  const lastRecipeElementRef = React.useCallback((node: HTMLDivElement) => {
-    if (isLoadingMore) return;
-    if (observerRef.current) observerRef.current.disconnect();
-    
-    observerRef.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        handleLoadMore();
-      }
-    }, { threshold: 0.1 });
-    
-    if (node) observerRef.current.observe(node);
-  }, [isLoadingMore, hasMore, page]);
 
   const timeContext = useMemo(() => {
     const hour = new Date().getHours();
@@ -611,26 +597,28 @@ export const App: React.FC = () => {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10">
-                  {recipes.map((recipe, index) => {
-                    const isLast = index === recipes.length - 1;
-                    return (
-                      <div key={recipe.id} ref={isLast ? lastRecipeElementRef : null}>
-                         <RecipeCard recipe={recipe} onClick={() => openRecipe(recipe)} />
-                      </div>
-                    );
-                  })}
+                  {recipes.map((recipe) => (
+                    <RecipeCard key={recipe.id} recipe={recipe} onClick={() => openRecipe(recipe)} />
+                  ))}
                 </div>
                 
                 <div className="mt-12 text-center h-20 flex items-center justify-center">
-                   {isLoadingMore && (
-                      <div className="flex flex-col items-center gap-3">
-                         <div className="w-8 h-8 border-4 border-gray-100 border-t-pop-red rounded-full animate-spin"></div>
-                         <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Buscando do forno...</span>
-                      </div>
-                   )}
-                   {!hasMore && recipes.length > 0 && (
+                   {hasMore ? (
+                      <button 
+                         onClick={handleLoadMore} 
+                         disabled={isLoadingMore}
+                         className="px-8 py-4 border border-gray-200 rounded-full text-sm font-bold text-gray-600 hover:text-pop-dark hover:border-gray-300 transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                         {isLoadingMore ? (
+                           <>
+                              <div className="w-5 h-5 border-2 border-gray-300 border-t-pop-red rounded-full animate-spin"></div>
+                              Buscando...
+                           </>
+                         ) : 'Carregar Mais Receitas'}
+                      </button>
+                   ) : recipes.length > 0 ? (
                       <span className="text-sm font-bold text-gray-400">Você chegou ao fim das receitas!</span>
-                   )}
+                   ) : null}
                 </div>
               </section>
             </LazySection>
