@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Receita Popular - Gastronomia Descomplicada</title>
+    
+    <meta name="description" content="O seu guia definitivo de gastronomia.">
+    
+    <!-- Open Graph Globais -->
+    <meta property="og:title" content="Receita Popular - Gastronomia Descomplicada">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="/favicon.svg">
+    <meta property="og:description" content="O seu guia definitivo de gastronomia descomplicada.">
+    <meta property="og:url" content="https://receitapopular.com.br">
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/favicon.svg">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#E82F3F">
+
+    <script>
+      // Safety shim: Ensures 'process.env' exists in the browser to prevent "white screen" crashes
+      window.process = window.process || { env: {} };
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=pub-6058225169212979" crossorigin="anonymous"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Montserrat"', 'sans-serif'],
+              serif: ['"Merriweather"', 'serif'],
+            },
+            colors: {
+              'pop-red': '#E82F3F',
+              'pop-yellow': '#FDBF15',
+              'pop-dark': '#1A1C20',
+              'pop-gray': '#F4F5F7',
+              'pop-green': '#27AE60',
+            },
+            animation: { 'fade-in': 'fadeIn 0.5s ease-out' },
+            keyframes: { fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } } }
+          }
+        }
+      }
+    </script>
+    <style>
+      body { background-color: #FFFFFF; color: #1A1C20; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* --- CSS DE IMPRESSÃO INFALÍVEL --- */
+      @media print {
+        /* Esconde tudo que não for o nosso alvo de impressão */
+        body > *:not(#root) { display: none !important; }
+        #root > *:not(.fixed) { display: none !important; } /* Esconde o app por trás do modal */
+        
+        /* Regras para o Modal de Impressão */
+        .print\:p-0 { padding: 0 !important; }
+        .print\:bg-white { background: white !important; }
+        .print\:static { position: static !important; }
+        .print\:shadow-none { box-shadow: none !important; }
+        .print\:h-auto { height: auto !important; }
+        .print\:w-full { width: 100% !important; }
+        .print\:rounded-none { border-radius: 0 !important; }
+        .print\:hidden { display: none !important; }
+        .print\:block { display: block !important; }
+        .print\:overflow-visible { overflow: visible !important; }
+        .print\:m-0 { margin: 0 !important; }
+        
+        /* Força fundo branco e texto preto */
+        body { background: white !important; color: black !important; }
+        
+        /* Remove headers/footers do navegador se possível */
+        @page { margin: 0; size: auto; }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.86.0",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
+  }
+}
+</script>
+</head>
+  <body class="font-sans antialiased text-pop-dark">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
