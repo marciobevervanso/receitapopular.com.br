@@ -97,6 +97,12 @@ export const storageService = {
       try {
           let currentImageUrl = recipe.imageUrl;
 
+          // Verifica se a imagem é externa e não pertence ao bucket do Supabase
+          const hasSupabaseMarker = currentImageUrl.includes('/storage/v1/object/public/images/');
+          if (currentImageUrl.startsWith('http') && !hasSupabaseMarker) {
+              throw new Error("Esta imagem está hospedada externamente e não no seu Supabase. Edite a receita e envie uma imagem do seu computador ou gere uma nova com IA para poder otimizar.");
+          }
+
           // Se a imagem ainda estiver em base64 (receita antiga mal salva),
           // faz o upload para o Supabase antes de enviar para o n8n.
           if (currentImageUrl.startsWith('data:image')) {
