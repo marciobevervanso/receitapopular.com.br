@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Recipe } from '../types';
-import { generateRecipeFromScratch, generateRecipeImage } from '../services/geminiService';
+import { generateRecipeFromScratch, generateRecipeImage, identifyUtensils } from '../services/geminiService';
 import { storageService } from '../services/storageService';
+import { fetchAffiliateLinks } from '../services/affiliateService';
 interface AiRecipeCreatorProps {
   onImportSuccess: (recipe: Recipe) => Promise<void>;
   onCancel: () => void;
@@ -17,6 +18,26 @@ export const AiRecipeCreator: React.FC<AiRecipeCreatorProps> = ({ onImportSucces
     setAiStatus('searching');
     try {
       const partialRecipe: any = await generateRecipeFromScratch(aiPrompt);
+      
+      setAiStatus('enriching');
+      try {
+         const settings = await storageService.getSettings();
+         if (settings.n8nWebhookUrl) {
+            let utensils = partialRecipe.affiliates || [];
+            if (utensils.length === 0) {
+               utensils = await identifyUtensils(partialRecipe as Recipe);
+            }
+            if (utensils.length > 0) {
+               const enrichedAffiliates = await fetchAffiliateLinks(utensils, settings.n8nWebhookUrl);
+               if (enrichedAffiliates.length > 0) {
+                  partialRecipe.affiliates = enrichedAffiliates;
+               }
+            }
+         }
+      } catch (affErr) {
+         console.warn("Failed to fetch shopee links for AI recipe", affErr);
+      }
+
       setAiStatus('imaging');
       
       const visualDesc = partialRecipe.visualDescription || `Plate of ${partialRecipe.title}`;
@@ -87,7 +108,9 @@ export const AiRecipeCreator: React.FC<AiRecipeCreatorProps> = ({ onImportSucces
                ) : (
                   <>
                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                     {aiStatus === 'searching' ? 'Pensando...' : 'Gerando Foto...'}
+                     {aiStatus === 'searching' && 'Criando receita com IA...'}
+                     {aiStatus === 'enriching' && 'Buscando ofertas Shopee...'}
+                     {aiStatus === 'imaging' && 'Gerando foto em 4K...'}
                   </>
                )}
             </button>

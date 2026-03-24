@@ -52,7 +52,7 @@ export const generateRecipeFromScratch = async (dishName: string): Promise<Omit<
     const structureResponse = await ai.models.generateContent({
       // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview", 
-      contents: `Você é o Editor Chefe do 'Receita Popular'. Crie uma receita completa de "${dishName}". Autêntica, com história cultural, segredos de chef. Transforme os dados em JSON. Responda ESTRITAMENTE em Português do Brasil (PT-BR). **IMPORTANTE**: No campo 'affiliates', liste 4-6 utensílios/eletros essenciais (ex: Airfryer, Batedeira, Forma) apenas com 'name' (deixe 'url' vazio).`,
+      contents: `ATENÇÃO: ATUE COMO EDITOR CHEFE E ESPECIALISTA EM SEO do 'Receita Popular'. Crie do zero uma receita espetacular de "${dishName}". DIRETRIZES: Seja autêntico, inclua história cultural, segredos de chef, adicione faq/tips úteis, estime nutrição com precisão. Transforme todos os dados em JSON. Responda ESTRITAMENTE em Português do Brasil (PT-BR). **VISUAL DESCRIPTION**: Gere a descrição visual OBRIGATORIAMENTE EM INGLÊS (para hiper-realismo fotográfico). Data Publicação: ${new Date().toISOString().split('T')[0]}. **UTENSÍLIOS (Campo affiliates)**: Liste OBRIGATORIAMENTE 4 a 6 utensílios/eletros essenciais (ex: Airfryer, Batedeira, Forma) apenas com 'name' (deixe 'url' vazio).`,
       config: { responseMimeType: "application/json", responseSchema: recipeSchema }
     });
     return JSON.parse(cleanJson(structureResponse.text));
