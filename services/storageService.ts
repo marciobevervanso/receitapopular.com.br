@@ -95,8 +95,17 @@ export const storageService = {
       console.log(`[n8n] Solicitando otimização total para: ${recipe.title}`);
 
       try {
+          let currentImageUrl = recipe.imageUrl;
+
+          // Se a imagem ainda estiver em base64 (receita antiga mal salva),
+          // faz o upload para o Supabase antes de enviar para o n8n.
+          if (currentImageUrl.startsWith('data:image')) {
+              console.log("[SmartOptimize] Imagem em base64 detectada, fazendo upload prévio...");
+              currentImageUrl = await this.uploadImage(currentImageUrl, `recipes/${recipe.slug}`);
+          }
+
           const rawData = await this.optimizeImage(
-              recipe.imageUrl, 
+              currentImageUrl, 
               `recipes/${recipe.slug}`, 
               recipe.slug,
               'full_replace'

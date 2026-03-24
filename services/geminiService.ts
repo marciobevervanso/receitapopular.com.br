@@ -250,7 +250,7 @@ export const generateWebStory = async (recipe: Recipe): Promise<Omit<WebStory, '
         try {
            const imgBase64 = await generateRecipeImage(`Vertical story format (9:16). Food photography. ${slide.visualPrompt}`);
            if(imgBase64.startsWith('data:')) {
-              imageUrl = imgBase64;
+              imageUrl = await storageService.uploadImage(imgBase64, `stories/${recipe.slug}`);
            }
         } catch (e) { console.error("Falha ao gerar slide de story:", e); }
       }

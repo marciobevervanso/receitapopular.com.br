@@ -103,7 +103,12 @@ export const WordPressImport: React.FC<ImportProps> = ({ onImportSuccess, catego
       
       if (partialRecipe.visualDescription) {
          try {
-            imageUrl = await generateRecipeImage(partialRecipe.visualDescription);
+            const generatedImage = await generateRecipeImage(partialRecipe.visualDescription);
+            if (generatedImage.startsWith('data:')) {
+                imageUrl = await storageService.uploadImage(generatedImage, `recipes/${post.slug}`);
+            } else {
+                imageUrl = generatedImage;
+            }
          } catch (imgErr) {
             console.warn("Image generation failed", imgErr);
          }

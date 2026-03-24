@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Recipe } from '../types';
 import { storageService } from '../services/storageService';
+import { generateSocialPost } from '../services/geminiService';
 
 interface DashboardRecipeListProps {
   recipes: Recipe[];
@@ -17,6 +18,55 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
   recipes, onEdit, onDelete, onUpdate, onCreateManual, filterDate, setFilterDate 
 }) => {
   const [optimizingId, setOptimizingId] = useState<string | null>(null);
+  const [sharingId, setSharingId] = useState<string | null>(null);
+
+  const handleShare = async (e: React.MouseEvent, recipe: Recipe) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (sharingId) return;
+
+    try {
+      const settings = await storageService.getSettings();
+      const webhookUrl = settings.n8nSocialWebhookUrl;
+      
+      if (!webhookUrl) {
+        alert("Erro: O webhook de redes sociais do n8n não está configurado na aba 'Configurações'.");
+        return;
+      }
+
+      setSharingId(recipe.id);
+      
+      // 1. Generate text
+      const script = await generateSocialPost(recipe);
+
+      // 2. Publish
+      const payload = {
+        type: 'photo',
+        recipeId: recipe.id,
+        title: recipe.title,
+        url: `https://receitapopular.com.br/${recipe.slug}`,
+        caption: `${script.hook}\n\n${script.body}\n\n${script.cta}\n\n${script.hashtags}`,
+        mediaUrl: recipe.imageUrl
+      };
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        alert(`Sucesso! "${recipe.title}" enviado para o Insta/Face com texto gerado pela IA!`);
+      } else {
+        alert("A requisição para o n8n falhou. Verifique se o workflow está ativo.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Falha ao gerar/publicar postagem. Tente novamente.");
+    } finally {
+      setSharingId(null);
+    }
+  };
 
   // LOGICA DO BOTÃO RAIO (SIMPLIFICADA - DISPARO DIRETO)
   const handleOptimize = async (e: React.MouseEvent, recipe: Recipe) => {
@@ -139,6 +189,24 @@ export const DashboardRecipeList: React.FC<DashboardRecipeListProps> = ({
                                )}
                             </button>
                          )}
+                         
+                         {/* BOTÃO COMPARTILHAR (Mídias Sociais) */}
+                         <button 
+                           type="button"
+                           onClick={(e) => handleShare(e, recipe)} 
+                           disabled={sharingId === recipe.id}
+                           className={`w-9 h-9 flex items-center justify-center rounded-lg border transition-all cursor-pointer relative z-30 shadow-sm
+                             bg-pink-50 border-pink-200 text-pink-600 hover:bg-pink-100 hover:border-pink-300
+                             ${sharingId === recipe.id ? 'opacity-100 bg-gray-100 border-gray-200 text-gray-400' : ''}
+                           `}
+                           title="Compartilhar no Insta/Face (Gera a Copy com IA e posta via N8N)"
+                         >
+                            {sharingId === recipe.id ? (
+                               <div className="w-4 h-4 border-2 border-t-transparent border-gray-400 rounded-full animate-spin"></div>
+                            ) : (
+                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                            )}
+                         </button>
                          
                          <button 
                            type="button"

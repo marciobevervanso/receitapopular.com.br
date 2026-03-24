@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Recipe } from '../types';
 import { generateRecipeFromScratch, generateRecipeImage } from '../services/geminiService';
-
+import { storageService } from '../services/storageService';
 interface AiRecipeCreatorProps {
   onImportSuccess: (recipe: Recipe) => Promise<void>;
   onCancel: () => void;
@@ -20,9 +20,17 @@ export const AiRecipeCreator: React.FC<AiRecipeCreatorProps> = ({ onImportSucces
       setAiStatus('imaging');
       
       const visualDesc = partialRecipe.visualDescription || `Plate of ${partialRecipe.title}`;
-      const imageUrl = await generateRecipeImage(visualDesc);
+      let imageUrl = await generateRecipeImage(visualDesc);
       
       const slug = partialRecipe.title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-");
+      
+      if (imageUrl.startsWith('data:')) {
+          try {
+              imageUrl = await storageService.uploadImage(imageUrl, `recipes/${slug}`);
+          } catch (e) {
+              console.error("Failed to upload AI image to storage", e);
+          }
+      }
       
       const recipe: Recipe = {
         ...partialRecipe,
