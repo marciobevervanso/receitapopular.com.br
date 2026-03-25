@@ -233,26 +233,39 @@ export const identifyUtensils = async (recipe: Recipe): Promise<{name: string}[]
 export const generateWebStory = async (recipe: Recipe): Promise<Omit<WebStory, 'id'>> => {
   const ai = createAI();
   try {
-    const prompt = `Crie um Web Story com 8 a 15 slides dependendo do nível de detalhes da receita. Baseado em: "${recipe.title}". Descrição: ${recipe.description}. Ingredientes: ${recipe.ingredients.map(i => i.item).join(', ')}. REQUISITOS VISUAIS: Descreva uma imagem DIFERENTE em INGLÊS para cada slide.`;
+    const prompt = `Crie um Web Story com exatamente 8 a 12 slides focados nos detalhes visuais da receita. Baseado em: "${recipe.title}". Descrição: ${recipe.description}. Ingredientes: ${recipe.ingredients.map(i => i.item).join(', ')}. REQUISITOS VISUAIS: Descreva uma imagem DIFERENTE em INGLÊS para cada slide. Foque no processo e resultado final.`;
     const response = await ai.models.generateContent({
-      // Fix: Use recommended model for text tasks
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: { responseMimeType: "application/json", responseSchema: storySchema }
     });
     const data = JSON.parse(cleanJson(response.text));
     
-    // Gerar imagens em sequência (for...of) para não estourar o limite de conexões (Rate Limit - Error 429) do Google AI.
+    // Auxiliary function to gently pause execution
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    
+    // Generate images sequentially to avoid Google AI Rate Limits (Error 429)
     const slidesWithImages = [];
-    for (const slide of data.slides) {
+    for (let i = 0; i < data.slides.length; i++) {
+      const slide = data.slides[i];
       let imageUrl = recipe.imageUrl;
+      
       if (slide.visualPrompt) {
         try {
+           // Add a 5 second pause before generating the image to avoid rate limits, except for the first one
+           if (i > 0) {
+             console.log(`[Rate Limiter] Pausando 5s antes do slide ${i+1}...`);
+             await delay(5000);
+           }
+           
+           console.log(`[Story] Gerando imagem do slide ${i+1}/${data.slides.length}...`);
            const imgBase64 = await generateRecipeImage(`Vertical story format (9:16). Food photography. ${slide.visualPrompt}`);
            if(imgBase64.startsWith('data:')) {
               imageUrl = await storageService.uploadImage(imgBase64, `stories/${recipe.slug}`);
            }
-        } catch (e) { console.error("Falha ao gerar slide de story:", e); }
+        } catch (e) { 
+           console.error(`Falha ao gerar imagem para o slide ${i+1}:`, e); 
+        }
       }
       slidesWithImages.push({ ...slide, imageUrl });
     }
