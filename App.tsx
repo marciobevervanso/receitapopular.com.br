@@ -79,7 +79,6 @@ export const App: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isFridgeHunterOpen, setIsFridgeHunterOpen] = useState(false);
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
-  const [adSettings, setAdSettings] = useState<AdSettings | null>(null);
   const [isTimerOpen, setIsTimerOpen] = useState(false); 
 
   const [newsletterEmail, setNewsletterEmail] = useState('');
@@ -120,9 +119,6 @@ export const App: React.FC = () => {
     };
 
     loadData();
-    
-    const savedAds = localStorage.getItem('adSettings');
-    if (savedAds) setAdSettings(JSON.parse(savedAds));
 
     const path = window.location.pathname;
     const search = window.location.search;
@@ -503,7 +499,7 @@ export const App: React.FC = () => {
             
             <div className="max-w-7xl mx-auto px-4">
               <AdUnit 
-                slotId={adSettings?.slots.homeTop} 
+                slotId={settings.adSettings?.slots?.homeTop} 
                 className="mb-8" 
                 label="Publicidade Topo"
                 banners={settings.banners}
@@ -625,7 +621,7 @@ export const App: React.FC = () => {
 
             <div className="max-w-7xl mx-auto px-4">
               <AdUnit 
-                slotId={adSettings?.slots.homeMiddle} 
+                slotId={settings.adSettings?.slots?.homeMiddle} 
                 className="my-8 md:my-12" 
                 label="Publicidade Banner"
                 banners={settings.banners}
@@ -798,7 +794,7 @@ export const App: React.FC = () => {
               recipes={recipes}
               language={language}
               onOpenRecipe={openRecipe}
-              adSettings={adSettings}
+              adSettings={settings.adSettings}
               settings={settings}
             />
           } />
