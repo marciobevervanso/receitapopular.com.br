@@ -67,7 +67,7 @@ export const SocialPublisher: React.FC<SocialPublisherProps> = ({ recipes, setti
 
   const handlePublishMenu = async () => {
     if (!selectedRecipe || !script) return;
-    const webhookUrl = settings.n8nSocialWebhookUrl || 'https://n8n.seureview.com.br/webhook/social';
+    const webhookUrl = settings.n8nSocialWebhookUrl || 'https://n8n.seureview.com.br/webhook/carrosel';
     
     if (postType === 'video' && !videoUrl) {
       alert("Por favor, gere o vídeo (Veo) antes de enviar para publicação.");

@@ -61,7 +61,7 @@ export const StoryManager: React.FC = () => {
     setSendingId(story.id);
     try {
       const settings = await storageService.getSettings();
-      const webhookUrl = settings.n8nSocialWebhookUrl || 'https://n8n.seureview.com.br/webhook/social';
+      const webhookUrl = settings.n8nSocialWebhookUrl || 'https://n8n.seureview.com.br/webhook/carrosel';
       
       const images = (story.slides || []).map(s => s.imageUrl).filter(Boolean);
       const texts = (story.slides || []).map(s => s.text).filter(Boolean);

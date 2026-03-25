@@ -198,7 +198,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, onSa
                         value={formData.n8nSocialWebhookUrl || ''}
                         onChange={e => handleChange('n8nSocialWebhookUrl', e.target.value)}
                         className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono text-pink-600"
-                        placeholder="https://seu-n8n.com/webhook/social..."
+                        placeholder="https://seu-n8n.com/webhook/carrosel..."
                       />
                    </div>
                 </div>
