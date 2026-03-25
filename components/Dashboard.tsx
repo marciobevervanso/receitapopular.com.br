@@ -46,8 +46,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [adSettings, setAdSettings] = useState<AdSettings>({ clientId: '', slots: { homeTop: '', homeMiddle: '', sidebar: '' } });
 
   useEffect(() => {
-    const saved = localStorage.getItem('adSettings');
-    if (saved) setAdSettings(JSON.parse(saved));
     setUserStats(storageService.getUserLevel());
   }, [activeTab]);
 
@@ -118,7 +116,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Webhook and External Integration Hubs */}
         {activeTab === 'social' && <SocialPublisher recipes={currentRecipes} settings={settings} />}
         {activeTab === 'stories' && <StoryManager />}
-        {activeTab === 'ads' && <AdsenseManager />}
+        {activeTab === 'ads' && <AdsenseManager settings={settings} onSave={onUpdateSettings} />}
 
       </div>
     </div>

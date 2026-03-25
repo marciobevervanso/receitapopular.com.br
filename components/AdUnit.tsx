@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { AffiliateBanner } from '../types';
+import { storageService } from '../services/storageService';
 
 interface AdUnitProps {
   slotId?: string;
@@ -24,11 +25,11 @@ export const AdUnit: React.FC<AdUnitProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const savedConfig = localStorage.getItem('adSettings');
-    if (savedConfig) {
-      const parsed = JSON.parse(savedConfig);
-      setClientId(parsed.clientId || '');
-    }
+    storageService.getSettings().then(settings => {
+      if (settings?.adSettings?.clientId) {
+        setClientId(settings.adSettings.clientId);
+      }
+    }).catch(err => console.error("Failed to load ad settings", err));
   }, []);
 
   // Lazy loading logic for Ads

@@ -1,24 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { AdSettings } from '../types';
+import { AdSettings, SiteSettings } from '../types';
 
-export const AdsenseManager: React.FC = () => {
+interface AdsenseManagerProps {
+  settings: SiteSettings;
+  onSave: (settings: SiteSettings) => Promise<void>;
+}
+
+export const AdsenseManager: React.FC<AdsenseManagerProps> = ({ settings: globalSettings, onSave }) => {
   const [settings, setSettings] = useState<AdSettings>({
-    clientId: '',
-    slots: { homeTop: '', homeMiddle: '', sidebar: '', recipeTop: '', recipeMiddle: '', recipeBottom: '' }
+    clientId: 'ca-pub-6058225169212979',
+    slots: { 
+       homeTop: '6608470753', 
+       homeMiddle: '8784175551', 
+       sidebar: '1931126043', 
+       recipeTop: '7103294779', 
+       recipeMiddle: '7454782015', 
+       recipeBottom: '4716804589' 
+    }
   });
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('adSettings');
-    if (saved) {
-      setSettings(JSON.parse(saved));
+    if (globalSettings.adSettings) {
+      setSettings(globalSettings.adSettings);
     }
-  }, []);
+  }, [globalSettings.adSettings]);
 
-  const handleSave = () => {
-    localStorage.setItem('adSettings', JSON.stringify(settings));
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+  const handleSave = async () => {
+    try {
+      await onSave({ ...globalSettings, adSettings: settings });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch(err) {
+      console.error(err);
+      alert("Erro ao salvar no banco de dados.");
+    }
   };
 
   return (

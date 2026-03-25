@@ -147,6 +147,7 @@ export interface SiteSettings {
   n8nImageOptimizationUrl?: string; // Webhook para otimização de imagens (Legacy n8n)
   customConverterUrl?: string; // NOVO: URL direta do VPS conversor (Coolify)
   banners?: AffiliateBanner[]; 
+  adSettings?: AdSettings;
   socialLinks: {
     facebook?: string;
     instagram?: string;
