@@ -98,15 +98,9 @@ export const AdUnit: React.FC<AdUnitProps> = ({
     );
   }
 
-  // Fallback para AdSense
+  // Se não tiver slot configurado, não mostra nada pro visitante
   if (!slotId || !clientId) {
-    return (
-      <div className={`bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center p-4 text-gray-400 select-none ${className}`}>
-        <span className="text-[10px] font-bold uppercase tracking-widest mb-1">{label}</span>
-        <span className="text-xs">Espaço reservado (AdSense ou Banner)</span>
-        <span className="text-[10px] mt-2 opacity-50">(Configure no Dashboard)</span>
-      </div>
-    );
+    return null;
   }
 
   return (

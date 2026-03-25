@@ -92,13 +92,17 @@ export const App: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
+      const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
       try {
-        // Load only the first page of recipes to start (Optimized)
-        const [initialRecipes, loadedCats, loadedStories, loadedSettings] = await Promise.all([
-          storageService.getRecipesPaginated(0, 12),
-          storageService.getCategories(),
-          storageService.getStories(),
-          storageService.getSettings()
+        // Load with a 10s safety timeout to prevent infinite loading
+        const [initialRecipes, loadedCats, loadedStories, loadedSettings] = await Promise.race([
+          Promise.all([
+            storageService.getRecipesPaginated(0, 12),
+            storageService.getCategories(),
+            storageService.getStories(),
+            storageService.getSettings()
+          ]),
+          timeout(10000) as any
         ]);
 
         setRecipes(initialRecipes);
@@ -112,7 +116,7 @@ export const App: React.FC = () => {
            initAnalytics(loadedSettings.googleAnalyticsId, loadedSettings.metaPixelId);
         }
       } catch (error) {
-        console.error("Failed to load data", error);
+        console.error("Failed to load data (possible timeout)", error);
       } finally {
         setIsLoading(false);
       }
