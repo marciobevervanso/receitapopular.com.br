@@ -106,22 +106,26 @@ export const SocialPublisher: React.FC<SocialPublisherProps> = ({ recipes, setti
         script.hashtags
       ].join('\n');
 
+      const recipeImageUrl = selectedRecipe.imageUrl || '';
+      
       const payload = {
         type: postType,
         recipeId: selectedRecipe.id,
-        slug: selectedRecipe.slug,
-        title: selectedRecipe.title,
-        link: `https://receitapopular.com.br/${selectedRecipe.slug}`,
-        // Imagem da receita
-        imageUrl: selectedRecipe.imageUrl,
-        mediaUrl: postType === 'photo' ? selectedRecipe.imageUrl : videoUrl,
+        slug: selectedRecipe.slug || '',
+        title: selectedRecipe.title || 'Receita',
+        link: `https://receitapopular.com.br/${selectedRecipe.slug || ''}`,
+        // Imagem da receita (múltiplos campos para compatibilidade com n8n)
+        imageUrl: recipeImageUrl,
+        mediaUrl: postType === 'photo' ? recipeImageUrl : videoUrl,
+        // Campo compatível com o workflow antigo do WP
+        guid: { rendered: recipeImageUrl },
         // Duas versões do post
         facebookPost,
         instagramPost,
         // Dados da receita (para o n8n usar se quiser)
         output: {
           title: selectedRecipe.title,
-          slug: selectedRecipe.slug,
+          slug: selectedRecipe.slug || '',
           facebookPost,
           instagramPost,
           hook: script.hook,
@@ -130,6 +134,8 @@ export const SocialPublisher: React.FC<SocialPublisherProps> = ({ recipes, setti
           hashtags: script.hashtags,
         }
       };
+
+      console.log('[SocialPublisher] Payload para n8n:', JSON.stringify(payload, null, 2));
 
       const response = await fetch(webhookUrl, {
         method: 'POST',
