@@ -1,10 +1,12 @@
 
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AffiliateBanner } from '../types';
-import { storageService } from '../services/storageService';
+
+const DEFAULT_CLIENT_ID = 'ca-pub-6058225169212979';
 
 interface AdUnitProps {
   slotId?: string;
+  clientId?: string;
   format?: 'auto' | 'fluid' | 'rectangle';
   className?: string;
   label?: string;
@@ -14,23 +16,15 @@ interface AdUnitProps {
 
 export const AdUnit: React.FC<AdUnitProps> = ({ 
   slotId, 
+  clientId = DEFAULT_CLIENT_ID,
   format = 'auto', 
   className = '', 
   label = 'Publicidade',
   banners = [],
   position
 }) => {
-  const [clientId, setClientId] = useState<string>('');
   const [isVisible, setIsVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    storageService.getSettings().then(settings => {
-      if (settings?.adSettings?.clientId) {
-        setClientId(settings.adSettings.clientId);
-      }
-    }).catch(err => console.error("Failed to load ad settings", err));
-  }, []);
 
   // Lazy loading logic for Ads
   useEffect(() => {
