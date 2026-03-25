@@ -64,6 +64,19 @@ export const AdUnit: React.FC<AdUnitProps> = ({
     return matches[randomIndex];
   }, [banners, position]);
 
+  // Invoca o AdSense assim que a div estiver visível (Lazy Load AdSense)
+  useEffect(() => {
+     if (isVisible && !activeBanner && clientId && slotId) {
+        try {
+           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+           // @ts-ignore
+           (window.adsbygoogle = window.adsbygoogle || []).push({});
+        } catch (err) {
+           console.error("AdSense push error:", err);
+        }
+     }
+  }, [isVisible, activeBanner, clientId, slotId]);
+
   if (!isVisible) {
     // Placeholder to prevent layout shift
     return <div ref={containerRef} className={`min-h-[250px] w-full bg-transparent ${className}`}></div>;
