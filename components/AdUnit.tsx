@@ -104,14 +104,16 @@ export const AdUnit: React.FC<AdUnitProps> = ({
   }
 
   return (
-    <div className={`text-center my-8 overflow-hidden animate-fade-in ${className}`}>
+    <div className={`text-center my-8 w-full animate-fade-in ${className}`}>
        <div className="text-[10px] text-gray-300 uppercase tracking-widest mb-1 text-center">Publicidade</div>
-       <ins className="adsbygoogle"
-         style={{ display: 'block' }}
-         data-ad-client={clientId}
-         data-ad-slot={slotId}
-         data-ad-format={format}
-         data-full-width-responsive="true"></ins>
+       <div className="w-full flex justify-center">
+         <ins className="adsbygoogle"
+           style={{ display: 'block', width: '100%' }}
+           data-ad-client={clientId}
+           data-ad-slot={slotId}
+           data-ad-format={format}
+           data-full-width-responsive="true"></ins>
+       </div>
     </div>
   );
 };

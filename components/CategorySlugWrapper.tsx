@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { CategoryPage } from './CategoryPage';
+import { storageService } from '../services/storageService';
 import { Recipe, Category, SiteSettings } from '../types';
 
 interface CategorySlugWrapperProps {
@@ -20,6 +21,14 @@ export const CategorySlugWrapper: React.FC<CategorySlugWrapperProps> = ({
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [category, setCategory] = useState<Category | null>(null);
+  const [allRecipes, setAllRecipes] = useState<Recipe[]>(recipes);
+
+  useEffect(() => {
+    // Load ALL recipes for category filtering (not just paginated subset)
+    storageService.getRecipes().then(all => {
+      if (all.length > recipes.length) setAllRecipes(all);
+    }).catch(console.error);
+  }, [recipes]);
 
   useEffect(() => {
     if (!id) {
@@ -56,7 +65,7 @@ export const CategorySlugWrapper: React.FC<CategorySlugWrapperProps> = ({
       <CategoryPage 
         categoryName={category.name}
         categoryImage={category.img}
-        recipes={recipes}
+        recipes={allRecipes}
         onOpenRecipe={onOpenRecipe}
         onBack={() => navigate('/')}
       />
