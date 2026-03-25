@@ -67,13 +67,8 @@ export const SocialPublisher: React.FC<SocialPublisherProps> = ({ recipes, setti
 
   const handlePublishMenu = async () => {
     if (!selectedRecipe || !script) return;
-    const webhookUrl = settings.n8nSocialWebhookUrl;
+    const webhookUrl = settings.n8nSocialWebhookUrl || 'https://n8n.seureview.com.br/webhook/social';
     
-    if (!webhookUrl) {
-      alert("Erro: O webhook de redes sociais do n8n não está configurado em 'Configurações'.");
-      return;
-    }
-
     if (postType === 'video' && !videoUrl) {
       alert("Por favor, gere o vídeo (Veo) antes de enviar para publicação.");
       return;
@@ -81,13 +76,59 @@ export const SocialPublisher: React.FC<SocialPublisherProps> = ({ recipes, setti
 
     setIsPublishing(true);
     try {
+      // ---- FACEBOOK: Post completo com ingredientes e modo de preparo ----
+      const ingredientsList = selectedRecipe.ingredients
+        .map(i => `• ${i.amount} ${i.item}`)
+        .join('\n');
+      
+      const stepsList = selectedRecipe.steps
+        .map((s, idx) => `${idx + 1}. ${s.replace(/<[^>]*>/g, '')}`)
+        .join('\n');
+
+      const facebookPost = [
+        `${script.hook}\n`,
+        `${script.body}\n`,
+        `📝 INGREDIENTES:\n${ingredientsList}\n`,
+        `👨‍🍳 MODO DE PREPARO:\n${stepsList}\n`,
+        `⏰ Tempo: ${selectedRecipe.prepTime} preparo + ${selectedRecipe.cookTime} cozimento`,
+        `🍽️ Rende: ${selectedRecipe.servings} porções\n`,
+        `🔗 Receita completa: https://receitapopular.com.br/${selectedRecipe.slug}\n`,
+        script.hashtags
+      ].join('\n');
+
+      // ---- INSTAGRAM: Post de engajamento com "EU QUERO" ----
+      const instagramPost = [
+        `${script.hook}\n`,
+        `${script.body}\n`,
+        `${script.cta}\n`,
+        `Quer a receita completa? Comente "EU QUERO" 👇🔥\n`,
+        `📌 Salve esse post para não perder!\n`,
+        script.hashtags
+      ].join('\n');
+
       const payload = {
         type: postType,
         recipeId: selectedRecipe.id,
+        slug: selectedRecipe.slug,
         title: selectedRecipe.title,
-        url: `https://receitapopular.com.br/${selectedRecipe.slug}`,
-        caption: `${script.hook}\n\n${script.body}\n\n${script.cta}\n\n${script.hashtags}`,
-        mediaUrl: postType === 'photo' ? selectedRecipe.imageUrl : videoUrl
+        link: `https://receitapopular.com.br/${selectedRecipe.slug}`,
+        // Imagem da receita
+        imageUrl: selectedRecipe.imageUrl,
+        mediaUrl: postType === 'photo' ? selectedRecipe.imageUrl : videoUrl,
+        // Duas versões do post
+        facebookPost,
+        instagramPost,
+        // Dados da receita (para o n8n usar se quiser)
+        output: {
+          title: selectedRecipe.title,
+          slug: selectedRecipe.slug,
+          facebookPost,
+          instagramPost,
+          hook: script.hook,
+          body: script.body,
+          cta: script.cta,
+          hashtags: script.hashtags,
+        }
       };
 
       const response = await fetch(webhookUrl, {
