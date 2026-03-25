@@ -206,39 +206,56 @@ export const SocialPublisher: React.FC<SocialPublisherProps> = ({ recipes, setti
             </button>
           </div>
 
-          {script && (
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4 animate-[slideUp_0.2s_ease-out]">
-               <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-                  <h3 className="font-bold text-lg text-pop-dark">Rascunho Oficial</h3>
-                  <span className="text-xs bg-pop-dark text-white px-2 py-1 rounded font-bold">PT-BR</span>
-               </div>
-               <div>
-                 <span className="text-[10px] font-black text-pop-red uppercase tracking-widest">Atenção (Gancho)</span>
-                 <p className="font-bold text-lg leading-tight text-pop-dark">{script.hook}</p>
-               </div>
-               <div>
-                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Corpo do Post</span>
-                 <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{script.body}</p>
-               </div>
-               <div>
-                 <span className="text-[10px] font-black text-pop-green uppercase tracking-widest">Chamada pra Ação</span>
-                 <p className="font-bold text-pop-dark">{script.cta}</p>
-               </div>
-               <div>
-                 <p className="text-sm font-bold text-blue-500">{script.hashtags}</p>
-               </div>
-               
-               {postType === 'video' && script.visualPrompt !== 'none' && (
-                  <div className="pt-4 border-t border-gray-100">
-                    <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest flex items-center gap-1">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                        Instrução para a Câmera IA (Inglês)
-                    </span>
-                    <p className="text-xs text-gray-500 italic mt-1 bg-purple-50 p-3 rounded-lg border border-purple-100">{script.visualPrompt}</p>
+          {script && selectedRecipe && (() => {
+            const ingredientsList = selectedRecipe.ingredients
+              .map(i => `• ${i.amount} ${i.item}`)
+              .join('\n');
+            const stepsList = selectedRecipe.steps
+              .map((s, idx) => `${idx + 1}. ${s.replace(/<[^>]*>/g, '')}`)
+              .join('\n');
+
+            const fbPreview = `${script.hook}\n\n${script.body}\n\n📝 INGREDIENTES:\n${ingredientsList}\n\n👨‍🍳 MODO DE PREPARO:\n${stepsList}\n\n⏰ Tempo: ${selectedRecipe.prepTime} preparo + ${selectedRecipe.cookTime} cozimento\n🍽️ Rende: ${selectedRecipe.servings} porções\n\n🔗 Receita completa: https://receitapopular.com.br/${selectedRecipe.slug}\n\n${script.hashtags}`;
+
+            const igPreview = `${script.hook}\n\n${script.body}\n\n${script.cta}\n\nQuer a receita completa? Comente "EU QUERO" 👇🔥\n\n📌 Salve esse post para não perder!\n\n${script.hashtags}`;
+
+            return (
+              <div className="space-y-4 animate-[slideUp_0.2s_ease-out]">
+                {/* Facebook Preview */}
+                <div className="bg-white p-5 rounded-3xl border border-blue-100 shadow-sm">
+                  <div className="flex items-center gap-2 pb-3 border-b border-blue-50 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">f</div>
+                    <div>
+                      <h3 className="font-bold text-sm text-pop-dark">Facebook</h3>
+                      <span className="text-[10px] text-gray-400">Post completo com receita</span>
+                    </div>
                   </div>
-               )}
-            </div>
-          )}
+                  <pre className="text-xs text-gray-600 whitespace-pre-wrap font-sans leading-relaxed max-h-[300px] overflow-y-auto">{fbPreview}</pre>
+                </div>
+
+                {/* Instagram Preview */}
+                <div className="bg-white p-5 rounded-3xl border border-pink-100 shadow-sm">
+                  <div className="flex items-center gap-2 pb-3 border-b border-pink-50 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">IG</div>
+                    <div>
+                      <h3 className="font-bold text-sm text-pop-dark">Instagram</h3>
+                      <span className="text-[10px] text-gray-400">Engajamento "EU QUERO"</span>
+                    </div>
+                  </div>
+                  <pre className="text-xs text-gray-600 whitespace-pre-wrap font-sans leading-relaxed max-h-[300px] overflow-y-auto">{igPreview}</pre>
+                </div>
+
+                {postType === 'video' && script.visualPrompt !== 'none' && (
+                  <div className="bg-white p-5 rounded-3xl border border-purple-100 shadow-sm">
+                    <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                      Instrução para a Câmera IA (Inglês)
+                    </span>
+                    <p className="text-xs text-gray-500 italic mt-2 bg-purple-50 p-3 rounded-lg border border-purple-100">{script.visualPrompt}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Right Column: Media Preview & Publish */}
