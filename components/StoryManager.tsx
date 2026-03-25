@@ -9,6 +9,7 @@ export const StoryManager: React.FC = () => {
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [sendingId, setSendingId] = useState('');
   const [progressText, setProgressText] = useState('');
 
   const loadData = async () => {
@@ -53,6 +54,48 @@ export const StoryManager: React.FC = () => {
     } finally {
       setGenerating(false);
       setProgressText('');
+    }
+  };
+
+  const handleSendToN8n = async (story: WebStory) => {
+    setSendingId(story.id);
+    try {
+      const settings = await storageService.getSettings();
+      const webhookUrl = settings.n8nSocialWebhookUrl || 'https://n8n.seureview.com.br/webhook/social';
+      
+      const images = (story.slides || []).map(s => s.imageUrl).filter(Boolean);
+      const texts = (story.slides || []).map(s => s.text).filter(Boolean);
+
+      const payload = {
+        type: 'story_reel',
+        recipeId: story.recipeId,
+        title: story.title,
+        link: `https://receitapopular.com.br/web-stories/${story.id}`,
+        // Envia as imagens e textos estruturados para o n8n montar o vídeo
+        slides: story.slides,
+        images,
+        texts,
+        // Compatibilidade para o n8n
+        imageUrl: images[0] || '',
+        facebookPost: `Confira o passo a passo de ${story.title} no nosso novo Story! 📖✨\n\n🔗 Acesse para ver completo: https://receitapopular.com.br/web-stories/${story.id}`,
+        instagramPost: `Confira o passo a passo de ${story.title} no nosso novo Story!\n\nPara ver o story com a receita completa, acesse o link na bio ou comente "EU QUERO" 👇`,
+      };
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        alert("Web Story enviado com sucesso para o n8n! Você já pode montar o Reel no seu fluxo.");
+      } else {
+        alert("A requisição para o n8n falhou. Verifique se a URL do Webhook está correta nas Configurações.");
+      }
+    } catch (e) {
+      alert("Falha de rede ao tentar conectar com o webhook n8n.");
+    } finally {
+      setSendingId('');
     }
   };
 
@@ -161,16 +204,29 @@ export const StoryManager: React.FC = () => {
                        </div>
                     </div>
                     
-                    <div className="p-3 bg-white">
+                    <div className="p-3 bg-white flex flex-col gap-2">
                        <a 
                          href={`/web-stories/${story.id}`} 
                          target="_blank" 
                          rel="noopener noreferrer"
-                         className="w-full flex items-center justify-center gap-1 py-2 bg-gray-50 hover:bg-pop-dark hover:text-white text-gray-600 text-xs font-bold rounded-lg transition-colors border border-gray-100 shadow-sm"
+                         className="w-full flex items-center justify-center gap-1 py-1.5 bg-gray-50 hover:bg-pop-dark hover:text-white text-gray-600 text-[11px] font-bold rounded-lg transition-colors border border-gray-100 shadow-sm"
                        >
                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                         Ver Story Completo
+                         Ver Web Story
                        </a>
+                       
+                       <button
+                         onClick={() => handleSendToN8n(story)}
+                         disabled={sendingId === story.id}
+                         className="w-full flex items-center justify-center gap-1 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-[11px] font-bold rounded-lg transition-colors shadow-sm disabled:opacity-50"
+                       >
+                         {sendingId === story.id ? (
+                           <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                         ) : (
+                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                         )}
+                         Enviar p/ Reel (n8n)
+                       </button>
                     </div>
                  </div>
               );
