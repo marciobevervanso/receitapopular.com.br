@@ -61,7 +61,9 @@ export const StoryManager: React.FC = () => {
     setSendingId(story.id);
     try {
       const settings = await storageService.getSettings();
-      const webhookUrl = settings.n8nSocialWebhookUrl || 'https://n8n.seureview.com.br/webhook/carrosel';
+      // Derive the caroussel webhook URL from the main settings, ensuring it ends in /carrosel
+      const baseUrl = settings.n8nSocialWebhookUrl ? settings.n8nSocialWebhookUrl.split('/webhook/')[0] : 'https://n8n.seureview.com.br';
+      const webhookUrl = `${baseUrl}/webhook/carrosel`;
       
       const images = (story.slides || []).map(s => s.imageUrl).filter(Boolean);
       const texts = (story.slides || []).map(s => s.text).filter(Boolean);
