@@ -68,18 +68,28 @@ export const StoryManager: React.FC = () => {
       const images = (story.slides || []).map(s => s.imageUrl).filter(Boolean);
       const texts = (story.slides || []).map(s => s.text).filter(Boolean);
 
+      let finalLink = `https://receitapopular.com.br/web-stories/${story.id}`;
+      try {
+        const recipes = await storageService.getRecipes();
+        const recipe = recipes.find(r => r.id === story.recipeId);
+        if (recipe && recipe.slug) {
+          // Usa o formato limpo SEO-friendly
+          finalLink = `https://receitapopular.com.br/web-stories/${recipe.slug}`;
+        }
+      } catch(e) { console.error('Error resolving slug', e); }
+
       const payload = {
         type: 'story_reel',
         recipeId: story.recipeId,
         title: story.title,
-        link: `https://receitapopular.com.br/web-stories/${story.id}`,
+        link: finalLink,
         // Envia as imagens e textos estruturados para o n8n montar o vídeo
         slides: story.slides,
         images,
         texts,
         // Compatibilidade para o n8n
         imageUrl: images[0] || '',
-        facebookPost: `Confira o passo a passo de ${story.title} no nosso novo Story! 📖✨\n\n🔗 Acesse para ver completo: https://receitapopular.com.br/web-stories/${story.id}`,
+        facebookPost: `Confira o passo a passo de ${story.title} no nosso novo Story! 📖✨\n\n🔗 Acesse para ver completo: ${finalLink}`,
         instagramPost: `Confira o passo a passo de ${story.title} no nosso novo Story!\n\nPara ver o story com a receita completa, acesse o link na bio ou comente "EU QUERO" 👇`,
       };
 
