@@ -15,6 +15,7 @@ import { SearchBar } from './components/SearchBar';
 import { AdUnit } from './components/AdUnit';
 import { WebStoriesGallery } from './components/WebStoriesGallery';
 import { WebStoryViewer } from './components/WebStoryViewer';
+import { WebStorySlugWrapper } from './components/WebStorySlugWrapper';
 import { NutriScanner } from './components/NutriScanner';
 import { LoginScreen } from './components/LoginScreen';
 import { GlobalTimer } from './components/GlobalTimer'; 
@@ -783,6 +784,10 @@ export const App: React.FC = () => {
               onOpenStory={setActiveStory}
               onBack={() => navigate('/')}
             />
+          } />
+
+          <Route path="/web-stories/:slug" element={
+            <WebStorySlugWrapper settings={settings} />
           } />
 
           <Route path="/favoritos" element={
