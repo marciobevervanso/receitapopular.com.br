@@ -56,6 +56,31 @@ export const storageService = {
      return uploadImageInternal(data, `${folder}/img`);
   },
 
+  async uploadImageAsJpg(data: string | Blob, folder: string = 'misc'): Promise<string> {
+    try {
+      if (typeof data === 'string' && data.startsWith('http')) return data;
+      let blobToUpload: Blob;
+      if (typeof data === 'string' && data.startsWith('data:image')) {
+        const res = await fetch(data);
+        blobToUpload = await res.blob();
+      } else if (data instanceof Blob) {
+        blobToUpload = data;
+      } else {
+        return "https://images.unsplash.com/photo-1495521821378-860fa0171913?q=80&w=1000&auto=format&fit=crop";
+      }
+      const fileName = `${folder}/img-${Date.now()}.jpg`;
+      const { error } = await supabase.storage
+        .from(SUPABASE_BUCKET)
+        .upload(fileName, blobToUpload, { contentType: 'image/jpeg', upsert: true });
+      if (error) throw error;
+      const { data: publicUrlData } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(fileName);
+      return publicUrlData.publicUrl;
+    } catch (error) {
+      console.error("Failed to upload JPG image", error);
+      throw error;
+    }
+  },
+
   async removeFile(url: string): Promise<void> {
     const path = getRelativePath(url);
     if (!path) return;
