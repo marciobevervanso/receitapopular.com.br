@@ -43,7 +43,8 @@ export const StoryManager: React.FC = () => {
       const generated = await generateWebStory(recipe);
       const newStory: WebStory = {
         ...generated,
-        id: `story-${Date.now()}`
+        id: `story-${Date.now()}`,
+        slug: recipe.slug
       };
       await storageService.saveStory(newStory);
       setStories([newStory, ...stories]);
@@ -68,28 +69,18 @@ export const StoryManager: React.FC = () => {
       const images = (story.slides || []).map(s => s.imageUrl).filter(Boolean);
       const texts = (story.slides || []).map(s => s.text).filter(Boolean);
 
-      let finalLink = `https://receitapopular.com.br/web-stories/${story.id}`;
-      try {
-        const recipes = await storageService.getRecipes();
-        const recipe = recipes.find(r => r.id === story.recipeId);
-        if (recipe && recipe.slug) {
-          // Usa o formato limpo SEO-friendly
-          finalLink = `https://receitapopular.com.br/web-stories/${recipe.slug}`;
-        }
-      } catch(e) { console.error('Error resolving slug', e); }
-
       const payload = {
         type: 'story_reel',
         recipeId: story.recipeId,
         title: story.title,
-        link: finalLink,
+        link: `https://receitapopular.com.br/webstory/${story.slug || story.id}`,
         // Envia as imagens e textos estruturados para o n8n montar o vídeo
         slides: story.slides,
         images,
         texts,
         // Compatibilidade para o n8n
         imageUrl: images[0] || '',
-        facebookPost: `Confira o passo a passo de ${story.title} no nosso novo Story! 📖✨\n\n🔗 Acesse para ver completo: ${finalLink}`,
+        facebookPost: `Confira o passo a passo de ${story.title} no nosso novo Story! 📖✨\n\n🔗 Acesse para ver completo: https://receitapopular.com.br/webstory/${story.slug || story.id}`,
         instagramPost: `Confira o passo a passo de ${story.title} no nosso novo Story!\n\nPara ver o story com a receita completa, acesse o link na bio ou comente "EU QUERO" 👇`,
       };
 
@@ -129,7 +120,7 @@ export const StoryManager: React.FC = () => {
            <h2 className="text-3xl font-extrabold text-pop-dark flex items-center gap-3">
               Web Stories <span className="text-gray-400 text-lg font-medium tracking-normal">({stories.length})</span>
            </h2>
-           <p className="text-gray-500 mt-2">Os Web Stories publicados ficam acessíveis via /web-stories/id e são excelentes para gerar tráfego orgânico do Google Discover.</p>
+           <p className="text-gray-500 mt-2">Os Web Stories publicados ficam acessíveis como páginas individuais (ex: /webstory/pao-de-queijo) e são excelentes para gerar tráfego orgânico do Google Discover.</p>
         </div>
         <button 
            onClick={loadData} 
@@ -200,10 +191,10 @@ export const StoryManager: React.FC = () => {
                        <img src={coverImage} alt={story.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
                        
-                       <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <div className="absolute top-3 right-3 z-30">
                           <button 
-                            onClick={() => handleDelete(story.id, story.title)}
-                            className="w-8 h-8 bg-black/50 backdrop-blur-sm text-white rounded-full flex items-center justify-center hover:bg-pop-red transition-colors"
+                            onClick={(e) => { e.stopPropagation(); handleDelete(story.id, story.title); }}
+                            className="w-9 h-9 bg-red-500/90 backdrop-blur-sm text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg"
                             title="Excluir Web Story"
                           >
                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -211,14 +202,14 @@ export const StoryManager: React.FC = () => {
                        </div>
                        
                        <div className="absolute bottom-4 left-4 right-4 text-white">
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 backdrop-blur-md px-2 py-0.5 rounded mb-2 inline-block">ID: {(story.id).substring(0, 5)}...</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 backdrop-blur-md px-2 py-0.5 rounded mb-2 inline-block">{story.slug ? `/${story.slug}` : `ID: ${(story.id).substring(0, 5)}...`}</span>
                           <h3 className="font-bold text-sm leading-tight drop-shadow-md line-clamp-2">{story.title}</h3>
                        </div>
                     </div>
                     
                     <div className="p-3 bg-white flex flex-col gap-2">
                        <a 
-                         href={`/web-stories/${story.id}`} 
+                         href={`/webstory/${story.slug || story.id}`} 
                          target="_blank" 
                          rel="noopener noreferrer"
                          className="w-full flex items-center justify-center gap-1 py-1.5 bg-gray-50 hover:bg-pop-dark hover:text-white text-gray-600 text-[11px] font-bold rounded-lg transition-colors border border-gray-100 shadow-sm"

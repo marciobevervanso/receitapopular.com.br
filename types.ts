@@ -75,6 +75,7 @@ export interface WebStory {
   id: string;
   recipeId: string;
   title: string;
+  slug?: string;
   slides: StorySlide[];
 }
 

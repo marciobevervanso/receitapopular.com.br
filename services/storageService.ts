@@ -279,6 +279,17 @@ export const storageService = {
     if (error) throw error;
   },
 
+  async getStoryBySlug(slug: string): Promise<WebStory | null> {
+    const { data, error } = await supabase
+      .from('web_stories')
+      .select('*')
+      .filter('data->>slug', 'eq', slug)
+      .limit(1)
+      .single();
+    if (error || !data) return null;
+    return { ...data.data, id: data.id } as WebStory;
+  },
+
   getMealPlan(): MealPlan {
     const saved = localStorage.getItem('mealPlan');
     if (saved) return JSON.parse(saved);

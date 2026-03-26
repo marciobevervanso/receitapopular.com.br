@@ -15,7 +15,7 @@ import { SearchBar } from './components/SearchBar';
 import { AdUnit } from './components/AdUnit';
 import { WebStoriesGallery } from './components/WebStoriesGallery';
 import { WebStoryViewer } from './components/WebStoryViewer';
-import { WebStorySlugWrapper } from './components/WebStorySlugWrapper';
+import { WebStoryPage } from './components/WebStoryPage';
 import { NutriScanner } from './components/NutriScanner';
 import { LoginScreen } from './components/LoginScreen';
 import { GlobalTimer } from './components/GlobalTimer'; 
@@ -786,10 +786,6 @@ export const App: React.FC = () => {
             />
           } />
 
-          <Route path="/web-stories/:slug" element={
-            <WebStorySlugWrapper settings={settings} />
-          } />
-
           <Route path="/favoritos" element={
             <FavoritesPage 
               recipes={recipes.filter(r => storageService.isFavorite(r.id))}
@@ -797,6 +793,8 @@ export const App: React.FC = () => {
               onBack={() => navigate('/')}
             />
           } />
+
+          <Route path="/webstory/:slug" element={<WebStoryPage />} />
 
           <Route path="/:slug" element={
             <RecipeSlugWrapper 
